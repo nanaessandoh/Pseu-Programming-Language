@@ -1,0 +1,469 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>The-Pseu-Programming-Langauge.md – </title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" href="docs.css" type="text/css" />
+</head>
+<body>
+<div id="TOC">
+<ul>
+<li><a href="#the-pseu-programming-language">The Pseu programming language</a><ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#some-examples">Some examples</a></li>
+<li><a href="#some-general-remarks-on-syntax">Some general remarks on syntax</a></li>
+<li><a href="#data-types-and-data-values">Data types and data values</a></li>
+<li><a href="#constants">Constants</a></li>
+<li><a href="#constructors">Constructors</a></li>
+<li><a href="#lookup">Lookup</a></li>
+<li><a href="#operator-syntax">Operator syntax</a></li>
+<li><a href="#application">Application</a></li>
+<li><a href="#sending-messages">Sending messages</a></li>
+<li><a href="#type-checking">Type checking</a></li>
+<li><a href="#core-syntax">Core syntax</a></li>
+<li><a href="#meaning">Meaning</a><ul>
+<li><a href="#blocks">Blocks</a></li>
+<li><a href="#declarations">Declarations</a></li>
+<li><a href="#commands">Commands</a></li>
+<li><a href="#expressions">Expressions</a></li>
+</ul></li>
+<li><a href="#compile-time-errors.">Compile time errors.</a><ul>
+<li><a href="#use-of-an-undeclared-variable">Use of an undeclared variable</a></li>
+<li><a href="#declaring-a-variable-twice-in-one-block">Declaring a variable twice in one block</a></li>
+<li><a href="#assignment-to-a-val-variable-or-a-parameter">Assignment to a &quot;val&quot; variable or a parameter</a></li>
+</ul></li>
+<li><a href="#run-time-errors">Run-time errors</a></li>
+<li><a href="#lexing">Lexing</a></li>
+</ul></li>
+</ul>
+</div>
+<h1 id="the-pseu-programming-language">The Pseu programming language</h1>
+<h2 id="overview">Overview</h2>
+<p>The purpose of the pseu language is to provide a compact notation for describing algorithms at a high level of abstraction.</p>
+<p>For example types such as sets, sequences, tuples, and maps are built-in data types.</p>
+<h2 id="some-examples">Some examples</h2>
+<p>The examples may use syntax that is beyond the core. The extra syntax used is described in the document &quot;syntaticSugarAndOtherExtensions&quot;.</p>
+<p>This procedure will find all permutations of a set of integers</p>
+<pre><code>  fun perms( S : Set[Int] ) : Set[Seq[Int]]
+      var P : Set[Seq[Int]]
+      if #S = 0 then
+          P := { [ ] }
+      else
+          val a := s.any()
+          var P0 : Set[Seq[Int]]
+          P0 := perms( S-{a} )
+          P := { }
+          for seq &lt;- P0 do
+               for i &lt;- [0 ,.. #S] do
+                   P := P union { seq[0,..i] ^ a ^ seq[i,..] }
+     return P
+ end perms</code></pre>
+<p>Here is a blow by blow explanation of the program.</p>
+<p>The first line declares that <code>perms</code> is a procedure. It has an input parameter <code>S</code> of type <code>Set[Int]</code> (i.e. <code>S</code> represents a set of integers).</p>
+<p>The declaration <code>var P : Set[Seq[Int]]</code> declares a variable <code>P</code> of type <code>Set[Seq[Int]]</code>. Which means <code>P</code> represents a set of sequences of integers.</p>
+<p>The expression <code>#S = 0</code> is true if and only if the size of <code>S</code> is 0. When this true <code>p</code> is assigned a set containing only the empty sequence <code>[ ]</code>.</p>
+<p>After the <code>else</code>, there is a declaration of a local constant <code>a</code>, which is initialized with an arbitrary member of set <code>S</code>. Variable <code>P0</code> is declared to have the same type as <code>P</code>; it is not initialized. The next line is a recursive call to procedure <code>perms</code>. The argument <code>S-{a}</code> is the set of all think in <code>S</code> other than <code>a</code>.</p>
+<p>Next, <code>P</code> is assigned the empty set <code>{ }</code>. The following lines define two nested for loops that add values to set <code>P</code>.</p>
+<p>The second last line indicates that the result of the function is the value of variable <code>P</code>.</p>
+<p>The final line marks the end of the function definition.</p>
+<p>It should be noted that sets and sequences in Pseu are mathematical in nature. That is, they are immutable values. Our variable <code>P</code> refers to different values at different times rather than always referring to one object whose value changes.</p>
+<h2 id="some-general-remarks-on-syntax">Some general remarks on syntax</h2>
+<p>The syntax of the language is mostly conventional. It uses <code>:=</code> for assignment and initialization and <code>=</code> for equality. It is block structured. It requires, a semicolon <code>;</code> after each command or declaration, except for the last one in a block.</p>
+<p>There are some unusual rules about indentation, similar to, but different from, Python. These are beyond the core and are described in the document &quot;syntaticSugarAndOtherExtensions&quot;.</p>
+<h2 id="data-types-and-data-values">Data types and data values</h2>
+<p>The language has at least the following data types and values</p>
+<ul>
+<li><code>Bool</code> the boolean values <code>true</code> and <code>false</code>.</li>
+<li><code>Int</code> integers of any size.</li>
+<li><code>String</code> immutable sequences of characters of any length</li>
+<li><code>Set[T]</code> immutable finite sets containing only items of type <code>T</code>. E.g. <code>Set[Set[Int]]</code></li>
+<li><code>Seq[T]</code> immutable finite sequences containing only items of type <code>T</code>. E.g. <code>Seq[Bool]</code>.</li>
+<li><code>T * U</code> pairs of values. The first value is from <code>T</code>, the second is from <code>U</code>. Similarly <code>T * U * V</code> is the type of triples of values and so on for longer tuples. These [product types can also be written as <code>Product[T,U,V]</code> where the number of type arguments is at least 2.</li>
+<li><code>Unit</code> is a type that only has one value, namely the empty tuple.</li>
+<li><code>T -&gt; U</code> functions from <code>T</code> to <code>U</code>. This can also be written as <code>Fun[T,U]</code>.</li>
+<li><code>Any</code> All values have type <code>Any</code></li>
+<li><code>None</code> No values have type <code>None</code>.</li>
+</ul>
+<p>Note there are no length 1 tuples. (In a sense every value is a length 1 tuple.)</p>
+<p>Implementation note: It is important that the set of types and the set of values be easily expandable.</p>
+<h2 id="constants">Constants</h2>
+<p>The keywords <code>true</code> and <code>false</code> .</p>
+<p>Integer constants are sequences of 1 or more decimal digits. Underscores can be used to ease readability. E.g., <code>0</code>, <code>123</code>, <code>123_456_789_012_345</code>.</p>
+<p>String constants are enclosed by double quotes. E.g. <code>&quot;&quot;</code>, <code>&quot;abc&quot;</code>, ... . The syntax for strings is borrowed from Java, so you can write things like &quot;&quot;\&quot; which is a string of 3 characters, as in Java.</p>
+<h2 id="constructors">Constructors</h2>
+<p>We can construct a set from a sequence of expression using the syntax. <code>{X, Y, Z}</code> where <code>X</code>, <code>Y</code>, and <code>Z</code> are expressions.</p>
+<p>We can construct a sequence from a sequence of expression using the syntax. <code>[X, Y, Z]</code> where <code>X</code>, <code>Y</code>, and <code>Z</code> are expressions.</p>
+<p>Pairs, triples, etc. are made using parentheses and. E.g. <code>(X,Y,Z)</code> makes a triple. <code>()</code> makes the 0-tuple. There are no 1-tuples in the language, so <code>(X)</code> just means <code>X</code>.</p>
+<p>Functions are made using lambda expressions. An example of a lambda expression is <code>fun( x : Int ) x .binary+ 1 end fun</code></p>
+<h2 id="lookup">Lookup</h2>
+<p>For each value, there are other values associated with it via names. For example, the sequence <code>[99,98,97]</code> is associated with the number 3 via the name <code>length</code>. We can lookup such values, using dot (<code>.</code>) notation. For example <code>[99,98,97].length</code> is a complicated way of writing <code>3</code>.</p>
+<p>Often the result of a lookup is a function value. For example <code>[1,2,3].cat</code> might result in a function that concatenates <code>[1,2,3]</code>sequence with its argument so that <code>[1,2,3].cat( s )</code> concatenates <code>[1,2,3]</code> with the value of <code>s</code>.</p>
+<h2 id="operator-syntax">Operator syntax</h2>
+<p>Uses of binary operators such as <code>123 - x</code> will be turned into combination of lookups and application by the parser. The example expression is equivalent to <code>123.binary-(x)</code>. Here the name is the two token sequence <code>binary -</code>.</p>
+<p>Likewise uses of unary operators such as <code>-x</code> are turned into combinations of lookups and applications by the parser. The example is equivalent to <code>x.unary- ()</code>.</p>
+<h2 id="application">Application</h2>
+<p>Applications can have more than one or less than one argument. These cases are equivalent to sending a single argument. Again, this is a trivial syntactic matter. An expression <code>E()</code> is equivalent to the expression <code>E(())</code>; that is, the argument will be the empty tuple. An expression <code>E(F,G,H)</code> is equivalent to an expression <code>E((F,G,H))</code>; so the single argument value will be a triple.</p>
+<p>Conversely in most cases, the parentheses are not needed. For example <code>f 123</code> applies function <code>f</code> to argument <code>123</code>.</p>
+<h2 id="sending-messages">Sending messages</h2>
+<p>Message sending actually has two steps. Consider the expression <code>123.binary +(321)</code></p>
+<ul>
+<li>The first step is look-up. This step looks up the name in the recipient and results in a function value. For example the result of <code>123.binary +</code> is a function value.</li>
+<li>The second step is application. This step applies the resulting function to an argument.</li>
+</ul>
+<p>These steps can actually be separated. The following code should work</p>
+<pre><code>     val f : Int -&gt; Int := 123.binary + ;
+     print( f(321) )</code></pre>
+<p>The first line gives the name <code>f</code> to the result of the lookup. The second line applies that function.</p>
+<h2 id="type-checking">Type checking</h2>
+<p>[For the purposes of the 9874 project, type checking is only done at runtime. This includes checking the number of arguments passed to a function call. For example, the expression <code>12 + &quot;abc&quot;</code> will result in no error at compile time, but will result in an error at run time, since the <code>binary(+)</code> operation for integers is not prepared to accept a string as the argument. Similarly an expression <code>12 .binary +(34, 56)</code> would not be an error at compile time, but will result in an error at run time. In this case the argument is a pair and the <code>binary(+)</code> operation for integer values is not defined when the argument is a pair.]</p>
+<p>The following type checks need to be made at run-time.</p>
+<ul>
+<li>When a variable (val or var) is assigned, the value must be in the type of the variable. Otherwise, it is a run-time error.</li>
+<li>When a user defined function with one parameter is applied, the value passed as argument must be the same type as that parameter.</li>
+<li>When a user defined function with 0 parameters is applied, the argument value must be the empty tuple.</li>
+<li>When a user defined function with 2 or more parameters is applied, the argument must be a tuple of the same length and each item of that tuple must be in the type of the corresponding parameter</li>
+<li>Similar checks for built-in functions.</li>
+<li>The result of a user defined function should be in return type of the function.</li>
+<li>In a lookup expression, such as <code>x.y</code>, the name <code>y</code> must be mapped to something for the value <code>x</code>. E.g., <code>123.binary+</code> is ok since <code>binary(+)</code> is defined for all integers. But <code>123.foobar</code> should probably result in a run-time error.</li>
+</ul>
+<p>[As a bonus goal, you can add compile time type checking.]</p>
+<h2 id="core-syntax">Core syntax</h2>
+<p>The following describes the core syntax of the language. Constructs that use the full syntax can be rewritten to use the core syntax, so we will start by implementing the core and add elements of the full syntax as needed.</p>
+<p>The syntax in this section is given using extended CFG notation. Terminals of the language are written in double quotes or as lower case words. The meaning of these words is discussed in the Section called Lexical rules. Nonterminals are written as words. The right hand side of each production is written with the following conventions:</p>
+<blockquote>
+<p>X Y</p>
+</blockquote>
+<p>means X followed by Y;</p>
+<blockquote>
+<p>X | Y</p>
+</blockquote>
+<p>means either X or Y;</p>
+<blockquote>
+<p>X?</p>
+</blockquote>
+<p>means an optional X;</p>
+<blockquote>
+<p>X*</p>
+</blockquote>
+<p>means zero or more X;</p>
+<blockquote>
+<p>X+</p>
+</blockquote>
+<p>means one or more X. Unquoted parentheses are used for grouping.</p>
+<pre><code> Block --&gt; ( BlockItem (&quot;;&quot; BlockItem)* )? (&quot;;&quot;)?
+ 
+ BlockItem -&gt;  Command | Declaration 
+ 
+ Command --&gt;  LHSs &quot;:=&quot; Exps
+           |  &quot;if&quot; Exp &quot;then&quot; Block &quot;else&quot; Block &quot;end&quot; &quot;if&quot;
+           |  &quot;while&quot; Exp &quot;do&quot; Block &quot;end&quot; &quot;while&quot;
+           |  &quot;for&quot; id &quot;&lt;-&quot; Exp &quot;do&quot; Block &quot;end&quot; &quot;for&quot;
+           |  &quot;return&quot; ( Exp )?
+           | &quot;begin&quot; Block &quot;end&quot;
+           | ExpCommand
+   
+ExpCommand --&gt; Exp
+
+PostfixOp --&gt; &quot;.&quot; Name | Arg
+ 
+LHSs --&gt; LHS (&quot;,&quot; LHS)*
+ 
+Exps --&gt; Exp  (&quot;,&quot; Exp)*
+ 
+LHS --&gt; id
+ 
+Declaration --&gt; &quot;var&quot; id &quot;:&quot; Type (&quot;:=&quot; Exp)?
+              | &quot;val&quot; id (&quot;:&quot; Type)? &quot;:=&quot; Exp
+
+Name --&gt; id | &quot;unary&quot; Op | &quot;binary&quot; Op
+
+Exp --&gt; SimpleExp
+     |  Exp PostfixOp
+
+SimpleExp --&gt; &quot;true&quot;
+         | &quot;false&quot;
+         | stringLiteral
+         | intLiteral
+         | id
+         | &quot;{&quot; (Exp (&quot;,&quot; Exp)* )? &quot;}&quot;
+         | &quot;[&quot; (Exp (&quot;,&quot; Exp)* )? &quot;]&quot;
+         | &quot;fun&quot; &quot;(&quot; Parameters  &quot;)&quot; (&quot;:&quot; Type)? &quot;do&quot; Block &quot;end&quot; &quot;fun&quot;
+         | ParenthizedExp
+ 
+ParenthizedExp --&gt; &quot;(&quot; (Exp (&quot;,&quot; Exp)* )? &quot;)&quot;
+         
+Arg --&gt;  SimpleExp 
+
+Op --&gt; &quot;*&quot;
+      | &quot;mod&quot;
+      | &quot;div&quot;
+      | &quot;union&quot; | &quot;intersection&quot;
+      | &quot;and&quot; | &quot;or&quot; | &quot;not&quot; | &quot;implies&quot;
+      | otherOp
+      | latexOp
+
+Type --&gt; ProductType 
+         | Type &quot;-&gt;&quot; ProductType
+
+ProductType --&gt; SimpleType (&quot;*&quot; SimpleType)*
+
+SimpleType --&gt; id
+             | id &quot;[&quot; Types &quot;]&quot;
+             | &quot;(&quot; Type &quot;)&quot;
+
+Types --&gt; Type (&quot;,&quot; Type)*
+
+Parameters --&gt; (Parameter (&quot;,&quot; Parameter)*)?
+
+Parameter --&gt; id &quot;:&quot; Type
+</code></pre>
+<h2 id="meaning">Meaning</h2>
+<h3 id="blocks">Blocks</h3>
+<p>A block of commands and declarations is executed from left to right. All the variables (whether val or var) declared (directly) within the block are scoped to the block.</p>
+<pre><code>    val f := fun () : Int do return x end do ;
+    val x : Int := 42 ;
+    print( f() ) </code></pre>
+<p>should print 42.</p>
+<p>However, it is not allowed (by a run time check) for a location to be read or written before it has been declared and initialized. For example:</p>
+<pre><code>    val y : Int := x + 1 ; // Allowed by compiler. But causes a run time error.
+    val x : Int := 42 ;
+    print( f() ) </code></pre>
+<p>Code in inner blocks can access variables declared in outer blocks. For example</p>
+<pre><code>   val x : Int := 42 ;
+   var y : Int := 10 ;
+   while y.binary /= ( 0 ) do
+       print(x) ;
+       y := y.unary -( )
+   end</code></pre>
+<p>Should compile and run just fine.</p>
+<p>Variable resolution should be done at compile time. Thus the program</p>
+<pre><code>    print(x)</code></pre>
+<p>should cause a compile time error, since <code>x</code> is not declared. (The reference to the <code>print</code> variable is no problem, since <code>print</code> is a built-in variable which is implicitly declared at block level 0.)</p>
+<p>The run-time analogue of a block is a <strong>frame</strong>. A frame is a array of locations and a pointer to a parent frame.</p>
+<p>Blocks, command, and declarations all evaluate to a value. The value of a nonempty block is the value of its last command or declaration. The value of an empty block is the empty tuple. This convention is useful so we don't need a return at the end of function. E.g. these two expression have the same meaning.</p>
+<pre><code>    fun (k : Int) do k.binary*(k) end
+    fun (k : Int) do return k.binary*(k) end</code></pre>
+<h3 id="declarations">Declarations</h3>
+<p>A declaration</p>
+<pre><code>   val x : T := E</code></pre>
+<p>declares a variable <code>x</code>, having type <code>T</code>, initialized by expression <code>E</code>. Since the variable is declared as a <code>val</code>, it can't be assigned to and the compiler should report as errors any assignments to <code>val</code> variables.</p>
+<pre><code>   val x := E</code></pre>
+<p>declares a variable <code>x</code> initialized with expression <code>E</code>. Since the variable is declared as a <code>val</code>, it can't be assigned to and the compiler should report as errors any assignments to <code>val</code> variables.</p>
+<p>If the type is missing in a val declaration, the missing type can be filled in with Any. E.g. these two declarations mean the same thing</p>
+<pre><code>   val x := E
+   val x : Any := E</code></pre>
+<p>A var declaration</p>
+<pre><code>   var x : T := E</code></pre>
+<p>is similar to a val declaration, but assignments to <code>x</code> are allowed.</p>
+<pre><code>   var x : T </code></pre>
+<p>is similar, except that the variable is initially uninitialized. Any fetch from the variable before it is assigned a value is a run-time error.</p>
+<p>Variables remain uninitialized until their declaration is encountered. For example</p>
+<pre><code>   val x : Int := y ; // Ok at compile time
+   var y : Int := x</code></pre>
+<p>The use of <code>y</code> in the first declaration is permitted at compile time because the scope of <code>y</code> covers the whole block. However, at run time it is an error to fetch from <code>y</code> or assign to <code>y</code> until its declaration has been executed.</p>
+<p>Similarly, the following code has a run time error.</p>
+<pre><code>   y := 2 // Ok at compile time
+   var y : Int := 1</code></pre>
+<p>The run-time analogue to a variable is a location. Locations are located in a frame.</p>
+<p>The value of each declaration is the value of the initialization expression if it is present. Otherwise the value is the empty tuple.</p>
+<h3 id="commands">Commands</h3>
+<h4 id="assignment-commands">Assignment commands</h4>
+<p>An assignment</p>
+<pre><code>   x := E</code></pre>
+<p>changes the value of <code>x</code> to the value of <code>E</code>.</p>
+<p>The right hand side can contain 2 or more expressions separated by commas. The parser treats these as if they were a tuple.</p>
+<pre><code>   x := E, F, G</code></pre>
+<p>abbreviates</p>
+<pre><code>   x := (E,F,G)</code></pre>
+<p>Both assign <code>x</code> a value that is a triple (i.e., a 3-tuple).</p>
+<p>The left hand side can consist of 2 or more variables separated by commas.</p>
+<pre><code>   x, y, z := E</code></pre>
+<p>In this case, the expression should evaluate to a triple --- this should be checked at run time, not compile time. If <code>E</code> does evaluate to a triple, then the three components are assigned (from left to right) to the three variables.</p>
+<p>There is a run-time check that variables can only be assigned values of the appropriate type.</p>
+<p>For example:</p>
+<pre><code>    var x : Int := &quot;123&quot; // Run-time error</code></pre>
+<p>and</p>
+<pre><code>    var y : Seq[Int] ;
+    y := 123 // Run-time error</code></pre>
+<p>The value of each assignment command is the value of the expression on the right-hand-side.</p>
+<h4 id="if-commands">If commands</h4>
+<pre><code>   if E then B0 else B1 end if</code></pre>
+<p>means what you would expect.</p>
+<p>There should be a run-time check that the expression evaluates to a boolean value (either true or false).</p>
+<p>The value of an if command the value of the block that gets executed.</p>
+<h4 id="while-commands">While commands</h4>
+<pre><code>   while E do B end while</code></pre>
+<p>means what you would expect, again there is a requirement that the expression is boolean.</p>
+<p>The value of each while command is the empty tuple.</p>
+<h4 id="begin-command">Begin command</h4>
+<p>A begin command is just a block nested within another block. This allows the scope of certain variables to be limited.</p>
+<p>The value of each begin command is the empty value of its block.</p>
+<h4 id="for-command">For command</h4>
+<p>A for command</p>
+<pre><code>   for x &lt;- E do B end for</code></pre>
+<p>is exactly equivalent to the following code</p>
+<pre><code>    begin
+       val it := (E).iterator() ;
+       while it.notEmpty() do
+          val x := it.next() ;
+          begin
+             B
+          end
+        end while
+    end</code></pre>
+<p>where <code>begin</code> and <code>end</code> mark the start and end of internal blocks and where <code>it</code> is actually a variable name that is guaranteed not to clash with any other variable in the program. This can be accomplished by actually using a name like <code>#7548</code>. This works because the language does allow <code>#</code> in a variable name.</p>
+<p>The value of each for command is the empty tuple.</p>
+<h4 id="return-command">Return command</h4>
+<p><code>return E</code> returns from a function invocation; the value of the invocation will be the value of <code>E</code>.</p>
+<p>A return command without the expression. Is equivalent to <code>return ()</code>.</p>
+<p>The value of return command is the empty tuple. (However there is no way to use this value, so it actually doesn't matter what its is.)</p>
+<h4 id="expression-commands">Expression commands</h4>
+<p>Any simple expression may be used as a command.</p>
+<p>The value of an expression command is the value of the expression.</p>
+<h3 id="expressions">Expressions</h3>
+<h4 id="literals">Literals</h4>
+<p>Int literals like <code>1234</code> evaluate to the corresponding integer value. Similarly for string literals, and <code>true</code> and <code>false</code>.</p>
+<p>Set and sequence literals are evaluated by evaluating the subexpressions and then creating the corresponding set or sequence values.</p>
+<h4 id="parenthesized-expressions">Parenthesized expressions</h4>
+<ul>
+<li>If there are 0 expressions within the parentheses, the result is the empty tuple.</li>
+<li>If there is 1 expression within the parentheses, expression is evaluated and the value of the parenthesized expression is the value of that expression.</li>
+<li>If there are 2 or more expressions in the parentheses, these expressions are evaluated and the result is a tuple made from these expressions.</li>
+</ul>
+<h4 id="function-expressions">Function expressions</h4>
+<p>A function expression evaluates to a closure value. A closure value consists of four things.</p>
+<ul>
+<li>The code for the block.</li>
+<li>Information about the parameters. The number of them, their names, and their types.</li>
+<li>The return type.</li>
+<li>A reference to the frame in which the closure is evaluated. (A frame is the run-time representation of a block.)</li>
+</ul>
+<p>If the result type is missing from a function expression, it can be treated as if it were Any. For example the expressions</p>
+<pre><code>    fun ( a : Int, b : String ) do b + a end fun
+    fun ( a : Int, b : String ) : Any do b + a end fun</code></pre>
+<p>Mean the same thing and can compile to the same code.</p>
+<h4 id="lookup-1">Lookup</h4>
+<p>A lookup looks like <code>E.n</code> where E is an expression and <code>n</code> is a name. The lookup is resolved at run-time. For each value, there is a set of names that can be looked up. If <code>n</code> is in that set, the lookup succeeds and the result is some value. Usually this value is a built in function value. For example, consider the lookup <code>123.binary+</code>. Here is what will likely happen at run time</p>
+<ul>
+<li>First, the expression <code>123</code> is evaluated o yield a value.</li>
+<li>Then the lookup happens. The virtual machine sends a <code>lookup(&quot;binary(+)&quot;)</code> message to that value. (The parser will turn the <code>binary +</code> construct into the string <code>&quot;binary(+)&quot;</code>.)</li>
+<li>The value sends a message to its type ---<code>Int</code>--- which includes a reference to itself.</li>
+<li>The type creates a built-in function value of type <code>Int-&gt;Int</code>, which will add 123 to its argument.</li>
+<li>That built-in function value is the result of the lookup expression.</li>
+</ul>
+<p>Now what about <code>123.foobarbang</code>?</p>
+<ul>
+<li>First, the expression <code>123</code> is evaluated o yield a value.</li>
+<li>Then the lookup happens. The virtual machine sends a <code>lookup(&quot;foobarbang&quot;)</code> message to that value.</li>
+<li>The value sends a message to its type ---<code>Int</code>--- which includes a reference to itself.</li>
+<li>Nothing is found, so the machine reports a run-time error.</li>
+</ul>
+<p>If we had compile-time checking, then the compile-time type of <code>E</code> would allow us to report at compile-time lookups that might fail. For those sure to succeed, we would get a type for the function returned. E.g. the type of the expression <code>123.binary +</code> would be <code>Int -&gt; Int</code>.</p>
+<h4 id="application-1">Application</h4>
+<p>An application expression <code>E F</code> means the value of <code>E</code> is to be applied to the value of <code>F</code>.</p>
+<p>Again, this requires run-time type checking. E.g. <code>123(456)</code> would compile fine, but should result in an error at run-time since integers don't support application.</p>
+<p>The following values support application.</p>
+<ul>
+<li>Sequences.</li>
+<li>Built-in function values.</li>
+<li>Defined function values (also known as &quot;closures&quot;).</li>
+</ul>
+<p>For example</p>
+<pre><code>   val s := [10,11,12] ;
+   print( s 2 )</code></pre>
+<p>should print 12. The value of <code>s</code> is a sequence. It is applied to 2 and the result is 12. (Sequences are indexed from 0.) The value of variable <code>print</code> is a built-in function. It is applied to 12. The effect is that 12 is printed to the output channel. (Changing the 2 to any value other than 0, 1, or 2 would result in a run-time error.)</p>
+<p>Consider</p>
+<pre><code>   val x := 123 ;
+   print( x.binary+( 765 ) )</code></pre>
+<p>The result of the lookup operation <code>x.binary+</code> is a built-in function value. This is applied to 765 and the result is 888.</p>
+<p>Consider</p>
+<pre><code>   val f := fun (y:Int, z:Int) : Int
+                if x.binary&lt;( y ) then return x 
+                else return y
+                end if
+            end fun ;
+              
+   print( f(123,456) )</code></pre>
+<p>In this case the value of <code>f</code> is a defined function value (or closure). The argument is a pair (or 2-tuple) (123,456).</p>
+<p>The evaluation of the expression <code>f(123,456)</code> is as follows</p>
+<ul>
+<li>The expressions <code>f</code> and <code>(123,456)</code> are evaluated. The former evaluates to a closure value. The later evaluates to a 2-tuple of two integers.</li>
+<li>The closure value contains 4 things.
+<ul>
+<li>One is a reference to frame. This is the frame in which the function value was declared.</li>
+<li>The second is a description of the parameters.</li>
+<li>The third is the type of the result, in this case Int.</li>
+<li>The fourth is a reference to the code segment that contains the machine code for the functions block.</li>
+</ul></li>
+<li>Then the application operation starts.</li>
+<li>A new memory frame is created. A memory frame is the run-time representation of a block. This frame has two locations, one for <code>x</code> and one for <code>y</code>. The parent of this frame comes from the closure.</li>
+<li>The items of the argument tuple are divided up between the parameters of the function. The two locations of the new frame are initialized with 123 and 456 respectively.</li>
+<li>The body of the function is executed in the context of the new frame.</li>
+<li>On the return command being executed, the function invocation is returned from and the value of the application is the same as the value of the expression in the return command.</li>
+</ul>
+<h2 id="compile-time-errors.">Compile time errors.</h2>
+<p>The following errors should be caught by the compiler. (Only the first error in each file needs to be reported, though.)</p>
+<h3 id="use-of-an-undeclared-variable">Use of an undeclared variable</h3>
+<p>For example:</p>
+<pre><code>   x + 1 ;</code></pre>
+<p>In this program x is never declared. If we assume that there is no global variable called &quot;x&quot;, this is a compile-time error.</p>
+<p>Another example:</p>
+<pre><code>   x := 42 // Error here.</code></pre>
+<h3 id="declaring-a-variable-twice-in-one-block">Declaring a variable twice in one block</h3>
+<p>For example</p>
+<pre><code>    val x : Int := 1 ;
+    val x : String := &quot;abc&quot;  // Error here.</code></pre>
+<p>The following is NOT an error</p>
+<pre><code>    val x : Int := 1 ;
+    if 1 = 2 then
+        val x : String := &quot;abc&quot; ; // No error here.
+        print x ; // print &quot;abc&quot; ;
+    else
+    end if ;
+    print x // prints 1.</code></pre>
+<h3 id="assignment-to-a-val-variable-or-a-parameter">Assignment to a &quot;val&quot; variable or a parameter</h3>
+<p>Both of these are compile-time errors</p>
+<pre><code>   val x := 1
+   x := 2  // Error on this line</code></pre>
+<pre><code>   fun (a : String)
+       a := &quot;abc&quot;  // Error on this line
+   end fun</code></pre>
+<h2 id="run-time-errors">Run-time errors</h2>
+<p>This list might not be exhaustive</p>
+<ul>
+<li>Reading a location, not yet stored to.</li>
+<li>Storing to a location before it is declared.</li>
+<li>Storing to a location that represents a parameter (other than its initialization).</li>
+<li>Storing to a location that represents a val variable (other than its initialization).</li>
+<li>Assigning (or initializing) a variable with a value not in its type.</li>
+<li>Assigning to multiple (2 or more) variables when the right hand side value is not a tuple or a tuple of a different length.</li>
+<li>Returning from a user defined function with a value not in its result type.</li>
+<li>Looking up an attribute that is not an attribute.</li>
+<li>Calling a function with an argument of the wrong type.</li>
+<li>Applying something that is not a function or sequence.</li>
+</ul>
+<h2 id="lexing">Lexing</h2>
+<p>[Note for 9874: You don't need to implement any of this, but it's good to know for testing.]</p>
+<p>Before lexing happens, Java-style unicode escapes are processed. This lets you use characters not in ascii while keeping the file in ascii. For example the input <code>val \u0061 : Int := 1</code> is treated as if the input were <code>val a : Int := 1</code>. This is most useful inside string literals. (An unfortunate side effect of this design decision is that the column numbers are thrown off in the source coordinates. So I should really either fix the calculation of column numbers --doable but tricky--- or change this design decision.</p>
+<p>Comments are as in C++, starting with two slashes and ending with the end of the line.</p>
+<p>Spaces, carriage returns, and newlines are skipped, but can be useful to separate tokens.</p>
+<p>Identifiers (id) must start with a letter and may contain letters, digits, and underscores. Identifiers must end with a letter or digit. Reserved words, such as &quot;if&quot; and &quot;fun&quot; are not considered identifiers. Case matters, so &quot;IF&quot; is an identifier and &quot;A&quot; is a different identifier from &quot;a&quot;.</p>
+<p>[Currently only the 52 upper and lowercase ascii letters are allowed and only the 10 ordinary decimal digits.]</p>
+<p>String literals (stringLiteral) are the same as in Java, so double quotes must be used and escape sequences such as , , \, and &quot; may be used.</p>
+<p>Integer literals (intLiteral) are made up of decimal digits. Underscores may be used internally, but not at the start or end.</p>
+<p>Any nonempty sequence of characters from the set { <code>~</code>, <code>!</code>, <code>@</code>, <code>#</code>,<code>$</code>, <code>%</code>, <code>^</code>, <code>&amp;</code>, <code>*</code>,<code>-</code>, <code>_</code>, <code>+</code>, <code>=</code>, <code>|</code>, <code>/</code>, <code>&lt;</code>, <code>&gt;</code>, <code>?</code>, <code>\</code> } is considered an other operator (otherOp), unless it is used for something else in the grammar. So <code>+</code> is an other operator as is <code>/\</code> and <code>_&lt;</code>. However <code>-&gt;</code> is not, since it has other uses in the grammar. Essentially <code>-&gt;</code> is a reserved operator, as are <code>&lt;-</code>, <code>:=</code> and <code>*</code>.</p>
+<p>However, // can not be used as an operator. Nor can //+\ or anything else starting with two slashes. An operator can contain double slashes as long as they aren't at the start. E.g. \+// is an operator.</p>
+<p>LaTeX operators (latexOp) consist of a backslash followed by one or more letters. E.g. <code>\le</code>. These are useful for expressing operators that aren't in the ascii character set without having to leave the ascii character set.</p>
+<p>Lexing follows the &quot;maximal munch&quot; rule meaning that as the input is processed from left to right, the characters are packed into tokens in a greedy fashion; i.e. as many characters are stuck together to make a token as possible before a token is produced. For example</p>
+<ul>
+<li><code>\le123</code> is 2 tokens (<code>\le</code> and <code>123</code>) since a LaTeX operator can not contain digits</li>
+<li><code>abc_123</code> is one token --- an identifier.</li>
+<li><code>abc _123</code> is three tokens (<code>abc</code>, <code>_</code> and <code>123</code>).</li>
+<li><code>a+-b</code> is three tokens (<code>a</code>, <code>+-</code>, and <code>b</code>)</li>
+<li><code>a+ -b</code> is four tokens (<code>a</code>, <code>+</code>, <code>-</code>, and <code>b</code>)</li>
+</ul>
+</body>
+</html>

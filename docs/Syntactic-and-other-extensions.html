@@ -1,0 +1,264 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>Syntactic-and-other-extensions.md – </title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" href="docs.css" type="text/css" />
+</head>
+<body>
+<div id="TOC">
+<ul>
+<li><a href="#syntactic-sugar-and-other-extensions">Syntactic sugar and other extensions</a><ul>
+<li><a href="#purely-syntactic-changes">Purely syntactic changes</a><ul>
+<li><a href="#if-syntax">If syntax</a></li>
+<li><a href="#operator-syntax">Operator syntax</a></li>
+<li><a href="#ranges">Ranges</a></li>
+<li><a href="#range-application">Range application</a></li>
+<li><a href="#brackets"><a id="brackets"></a> Brackets</a></li>
+<li><a href="#function-declaration">Function declaration</a></li>
+<li><a href="#short-form-lambda-expressions">Short form lambda expressions</a></li>
+<li><a href="#indentation-rules">Indentation rules</a></li>
+<li><a href="#omitting-semicolons-at-the-ends-of-lines.">Omitting semicolons at the ends of lines.</a></li>
+</ul></li>
+<li><a href="#deeper-enhancements">Deeper enhancements</a><ul>
+<li><a href="#others">Others</a></li>
+<li><a href="#implicit-typing">Implicit typing</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+<h1 id="syntactic-sugar-and-other-extensions">Syntactic sugar and other extensions</h1>
+<p>This document contains ideas on how to extend the syntax from the core language to the full language.</p>
+<p>Some of these ideas will be implemented by me before the end of 9874. Some are only half baked and need some thought and experimentation.</p>
+<p>In any case, 9874 students won't have to implement any of these ideas, they should stick to implementing the core language. So they shouldn't spend a lot of time (if any) reading this document.</p>
+<p>This section contains suggestions for how the syntax can be extended beyond the core to make the language more flexible and appealing to use.</p>
+<h2 id="purely-syntactic-changes">Purely syntactic changes</h2>
+<p>Many of these additions are purely syntactic and involve little or no additional abstract syntax.</p>
+<h3 id="if-syntax">If syntax</h3>
+<p>[I do plan to implement this for 9874.]</p>
+<p>The following sort of if syntax will be allowed.</p>
+<pre><code>   if X then A
+   elsif Y then B
+   elsif Z then C
+   end if</code></pre>
+<p>This is equivalent to</p>
+<pre><code>   if X then A
+   else if Y then B
+        else if Z then Z
+             else
+             end if
+        end if
+   end if</code></pre>
+<h3 id="operator-syntax">Operator syntax</h3>
+<p>[This is now implemented.]</p>
+<p>An expression <code>E + F</code> abbreviates <code>(E).binary+ (F)</code>. An expression <code>- E</code> abbreviates <code>(E).unary- ()</code>. The default precedence of binary operators is given by</p>
+<table>
+<thead>
+<tr class="header">
+<th>operator</th>
+<th>precedence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>implies</td>
+<td>100</td>
+</tr>
+<tr class="even">
+<td>or</td>
+<td>200</td>
+</tr>
+<tr class="odd">
+<td>and</td>
+<td>300</td>
+</tr>
+<tr class="even">
+<td>=</td>
+<td>400</td>
+</tr>
+<tr class="odd">
+<td>&lt;</td>
+<td>400</td>
+</tr>
+<tr class="even">
+<td>&gt;</td>
+<td>400</td>
+</tr>
+<tr class="odd">
+<td>&gt;_</td>
+<td>400</td>
+</tr>
+<tr class="even">
+<td>_&lt;</td>
+<td>400</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>400</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>400</td>
+</tr>
+<tr class="odd">
+<td>union</td>
+<td>500</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>500</td>
+</tr>
+<tr class="odd">
+<td>+</td>
+<td>500</td>
+</tr>
+<tr class="even">
+<td>-</td>
+<td>500</td>
+</tr>
+<tr class="odd">
+<td>*</td>
+<td>600</td>
+</tr>
+<tr class="even">
+<td>intersection</td>
+<td>600</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>600</td>
+</tr>
+<tr class="even">
+<td>/</td>
+<td>600</td>
+</tr>
+<tr class="odd">
+<td>div</td>
+<td>600</td>
+</tr>
+<tr class="even">
+<td>mod</td>
+<td>600</td>
+</tr>
+<tr class="odd">
+<td>^</td>
+<td>700</td>
+</tr>
+<tr class="even">
+<td>other operators</td>
+<td>1000000</td>
+</tr>
+</tbody>
+</table>
+<p>The other operators come in two flavours.</p>
+<ul>
+<li><p>Any string of one or more characters from the set { <code>~</code>, <code>!</code>, <code>@</code>, <code>#</code>,<code>$</code>, <code>%</code>, <code>^</code>, <code>&amp;</code>, <code>*</code>,<code>-</code>, <code>_</code>, <code>+</code>, <code>=</code>, <code>|</code>, <code>/</code>, <code>&lt;</code>, <code>&gt;</code>, <code>?</code>, <code>\</code> } otherwise used in the grammar.</p></li>
+<li><p>A backslash <code>\</code> followed by one or more letters is also considered an operator. This is useful for translating Pseu into LaTeX.</p></li>
+</ul>
+<p>Binary operators at the same precedence level always associate to the left, so for example <code>a ^ b ^ c</code> is the same as <code>(a ^ b) ^ c</code> and ultimately the same as <code>(a.^(b)).^(c)</code>.</p>
+<p>Unary operators have higher precedence than binary operators, but lower precedence than send operations and other postfix operations. So <code>- a + - b.f()</code> is the same as <code>a. unary-() + b.f().unary-()</code>, which is the same as</p>
+<pre><code>   a. unary-() .binary+( b.f().unary-() )</code></pre>
+<h3 id="ranges">Ranges</h3>
+<p>[ I don't plan to implement this soon.]</p>
+<p>Make <code>,..</code> and <code>,..,</code> be tokens.</p>
+<p>Define <code>[x,..y]</code> to mean <code>x.upTo(y)</code>; define <code>[x,..,y]</code> to mean <code>x.through(y)</code>; define <code>{x,..y}</code> to mean <code>x.upTo(y).toSet()</code>; and define <code>{x,..,y}</code> to mean <code>x.through(y).toSet()</code>.</p>
+<h3 id="range-application">Range application</h3>
+<p>Define <code>s(x,..y)</code> to mean <code>s.subSeq(x, y)</code>. If <code>s</code> is a sequence and <code>x</code> and <code>y</code> are integers.</p>
+<p>Similarly for <code>,..,</code>.</p>
+<h3 id="brackets"><a id="brackets"></a> Brackets</h3>
+<p>Allow square brackets for application. Some people might prefer to use <code>s[5]</code> to <code>s(5)</code>.</p>
+<p>This conflicts somewhat with the allowing the parentheses to be dropped. Does <code>s[5]</code> really mean <code>s(5)</code> or <code>s([5])</code>. Similarly, does <code>s[1,2,3]</code> mean <code>s(1,2,3)</code> or <code>s([1,2,3])</code>.</p>
+<p>With this proposal, we pretty much have to pick the first. Without this proposal, we have to pick the second.</p>
+<p>Similarly define <code>s[x,..y]</code> to mean <code>s(x,..y)</code>. Note that when <code>x</code> equals <code>y</code>, <code>s[x]</code> and <code>s[x,..y]</code> have different meanings, whereas (if they have any meaning at all) <code>s([x])</code> and <code>s([x,..y])</code> have the same meaning. Presumably the meaning of <code>s([x,..y])</code> would be the same as <code>s(x,..y)</code>.</p>
+<h3 id="function-declaration">Function declaration</h3>
+<h4 id="directly-declaring-a-function">Directly declaring a function</h4>
+<p>[This is implemented.]</p>
+<p>A declaration</p>
+<pre><code>    val f := fun (a : t0, b: t1) : u do ... end fun</code></pre>
+<p>can be abbreviated by</p>
+<pre><code>    fun f(a : t0, b: t1) : u do ... end fun</code></pre>
+<h4 id="procedures">Procedures</h4>
+<p>[This is implemented.]</p>
+<p>An expression</p>
+<pre><code>    fun (a : t0, b: t1) : Unit do ... ; () end fun</code></pre>
+<p>can be abbreviated by</p>
+<pre><code>    proc (a : t0, b: t1) do ... end proc</code></pre>
+<p>A declaration</p>
+<pre><code>    val p := proc (a : t0, b: t1) do ... end proc</code></pre>
+<p>can be abbreviated by</p>
+<pre><code>    proc p(a : t0, b: t1) do ... end proc</code></pre>
+<h3 id="short-form-lambda-expressions">Short form lambda expressions</h3>
+<p>[This is now implemented.]</p>
+<p>The expression</p>
+<pre><code>   (a: t0, b: t1) -&gt; E</code></pre>
+<p>where E is a simple expression, abbreviates</p>
+<pre><code>    fun ( a: t0, b: t1) do return E end fun</code></pre>
+<p>The precedence of the <code>(...) -&gt;</code> prefix is the same as unary operators. So you can write</p>
+<pre><code>   () -&gt; - a</code></pre>
+<p>But</p>
+<pre><code>   () -&gt; a + b</code></pre>
+<p>means</p>
+<pre><code>   ( () -&gt; a ) + b</code></pre>
+<p>Short form lambda expressions can not be used when there is an explicit result type. E.g.</p>
+<pre><code>   () : Int -&gt; a    // This is an error.</code></pre>
+<h3 id="indentation-rules">Indentation rules</h3>
+<p>[I might implement this for 9874.]</p>
+<p>The full syntax includes indentation restrictions. In return the various &quot;end&quot; markers can be omitted as can semicolons at the ends of lines.</p>
+<p>The basic restriction is that each command or declaration in a block must begin at the same column or on the same line. For example</p>
+<pre><code>      a := 1 ; b := 2</code></pre>
+<p>can be a block because both commands start on the same line. And</p>
+<pre><code>     a := 1 ;
+     b := 2 ;</code></pre>
+<p>can be a block because both commands start at the same column. But</p>
+<pre><code>     a := 1 ;
+         b := 2 ;</code></pre>
+<p>can not be a block. Nor can</p>
+<pre><code>     a := 1 ;
+   b := 2 ;</code></pre>
+<p>Furthermore, the first token of each block must begin at a column number larger than the first token of its containing command or declaration. For example</p>
+<pre><code>    if a &lt; b then
+       a := c
+    else  b := c</code></pre>
+<p>is allowed because the block between <code>then</code> and <code>else</code> starts at a larger column number than the keyword <code>if</code> and likewise the block that comes after <code>else</code>.</p>
+<p>Blocks can be optionally ended with <code>end</code>-markers. For example, the we could write</p>
+<pre><code>    if a &lt; b then
+       a := c
+    else 
+        b := c
+    end if</code></pre>
+<h3 id="omitting-semicolons-at-the-ends-of-lines.">Omitting semicolons at the ends of lines.</h3>
+<p>[I might implement this for 9874.]</p>
+<p>If we have the implementation rules as about and also adopt the convention that each expression should not have any tokens at or to the left of the first statement of any block it is in. Then we can make semi-colons at the ends of lines optional. For example</p>
+<pre><code>   a := f.foo
+            ( 123 ) 
+   b := 456</code></pre>
+<p>Here the argument is line after the function. No semicolon is inferred at the end of the first line.</p>
+<p>Since the <code>b</code> on the third line is indented the same as the first, it must be part of the next command. That the closing <code>)</code> is the last token of the first command can be inferred. The parser acts as if here were a <code>;</code> at the end of the second line.</p>
+<h2 id="deeper-enhancements">Deeper enhancements</h2>
+<h3 id="others">Others</h3>
+<p>[None of these will be implemented until after 9874.]</p>
+<ul>
+<li>Compile-time type checking</li>
+<li>User defined classes and interfaces</li>
+<li>Inheritance and overriding</li>
+<li>Generic classes and functions.</li>
+<li>Function overloading of some kind</li>
+<li>Algebraic data types and pattern matching</li>
+<li>Mutable sets and sequences</li>
+<li>out parameters and arrays???</li>
+<li>Pre and post conditions</li>
+<li>Automated verification</li>
+</ul>
+<h3 id="implicit-typing">Implicit typing</h3>
+<p>[I do not plan to implement this for 9874, as it requires type checking.]</p>
+<pre><code>    var x := E</code></pre>
+<p>abbreviates</p>
+<pre><code>    var x : T := E</code></pre>
+<p>where T is the most specific type that can be inferred for E.</p>
+<p>Similarly for val. The core syntax allows the type to be omitted from a val. In the absence of compile time type checking, we can use replace the missing type with Any. However with compile time type checking, it is better to replace the missing type with the type of E.</p>
+<p>Similarly with functions, the core syntax allows the</p>
+</body>
+</html>

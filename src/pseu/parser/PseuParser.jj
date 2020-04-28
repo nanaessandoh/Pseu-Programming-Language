@@ -1,0 +1,672 @@
+options
+{
+  STATIC = false;
+  DEBUG_PARSER = false ;
+  DEBUG_TOKEN_MANAGER = false ;
+  JAVA_UNICODE_ESCAPE = true ;
+}
+
+PARSER_BEGIN(PseuParser)
+package pseu.parser;
+
+import pseu.common.SourceCoords ;
+import pseu.common.Assert ;
+
+
+public class PseuParser
+{
+	private ASTBuilderI builder ;
+	private String fileName = "unknown.pseu" ;
+	
+	public void setBuilder( ASTBuilderI builder ) {
+		this.builder = builder ;
+	}
+	
+	public void setFileName( String fileName ) {
+		this.fileName = fileName ;
+	}
+	
+	private SourceCoords currentCoords() {
+		return makeCoords( getToken(1) ) ;
+	}
+	
+	private SourceCoords prevCoords() {
+		return makeCoords( getToken(0) ) ;
+	}
+	
+	private SourceCoords makeCoords( Token tok ) {
+		return new SourceCoords(
+			fileName,
+			tok.beginLine,
+			tok.beginColumn,
+			fileName,
+			tok.endLine,
+			tok.endColumn) ;
+	}
+	
+	private boolean stayInTheLoop( int p ) {
+		String op = getToken(1).image ;
+		return precedence( op ) >= p ; }
+	
+	private class Pair {
+		String name ;
+		int precedence ;
+		Pair( String str, int prec ) {
+		name = str ; precedence = prec ; }
+	}
+	
+	private Pair[] precedenceTable = {
+		new Pair( "implies", 100 ),
+		new Pair( "==>", 100 ),
+		new Pair( "or",      200 ),
+		new Pair( "and",     300 ),
+		new Pair( "=",       400 ),
+		new Pair( "!=",       400 ),
+		new Pair( "/=",       400 ),
+		new Pair( ">_",      400 ),
+		new Pair( "_<",      400 ),
+		new Pair( "<=",      400 ),
+		new Pair( ">=",      400 ),
+		new Pair( ">",       400 ),
+		new Pair( "<",       400 ),
+		new Pair( "\\le",    400 ),
+		new Pair( "\\ge",    400 ),
+		new Pair( "union",   500 ),
+		new Pair( "\\cup",   500 ),
+		new Pair( "+",       500 ),
+		new Pair( "-",       500 ),
+		new Pair( "*",       600 ),
+		new Pair( "/",       600 ),
+		new Pair( "div",     600 ),
+		new Pair( "mod",     600 ),
+		new Pair( "intersection", 600 ),
+		new Pair( "\\cap",   600 ),
+		new Pair( "^",       700 ) } ;
+	
+	private int precedence( String name ) {
+		for( Pair p : precedenceTable ) {
+			if( name.equals( p.name )  ) return p.precedence ; }
+		return 1000000 ;
+	}
+
+}
+
+PARSER_END(PseuParser)
+
+SKIP :
+{
+  " "
+| "\r"
+| "\t"
+| "\n"
+}
+
+SKIP :
+{
+	< COMMENT : "//" (~["\r","\n"])* >
+}
+
+TOKEN :
+{
+  < AND : "and">
+| < BEGIN : "begin">
+| < BINARY : "binary">
+| < DIV : "div">
+| < DO : "do">
+| < ELSE : "else">
+| < END : "end">
+| < FALSE : "false">
+| < FOR : "for">
+| < FUN : "fun">
+| < IF : "if">
+| < IMPLIES : "implies">
+| < INTERSECTION : "intersection">
+| < MOD : "mod">
+| < NOT : "not">
+| < OR : "or">
+| < PROC : "proc">
+| < RETURN : "return">
+| < THEN : "then">
+| < TRUE : "true">
+| < UNARY : "unary">
+| < UNION : "union">
+| < VAL : "val">
+| < VAR : "var">
+| < WHILE : "while">
+
+| < STAR : "*" >
+| < COMMA : "," >
+| < SEMICOLON : ";" >
+| < COLON : ":" >
+| < DOT : "." >
+| < LPAR : "(" >
+| < RPAR : ")" >
+| < LBRACK : "[" >
+| < RBRACK : "]" >
+| < LBRACE : "{" >
+| < RBRACE : "}" >
+| < RIGHT_ARROW : "->" >
+| < LEFT_ARROW : "<-" >
+
+// Integer literals may include underscores, but
+// must start and end with a digit.
+| < INT_LITERAL : <DIGIT> ((<DIGIT> | "_")* <DIGIT>)? >
+
+| < STRING_LITERAL:
+      "\""
+      (   (~["\"","\\","\n","\r"])
+        | <ESCAPESEQ>
+      )*
+      "\""
+  >
+
+| < LATEX_OP : "\\" (<LETTER>)+ >
+
+| < OTHER_OP : (["~", "!", "@", "#", "$", "%", "^", "&", "*",
+                 "-", "_", "+", "=", "|", "/", "<", ">",
+                 "?", "\\"])+ >
+                 
+| < ID : ( <LETTER> )
+         ( (<LETTER> | <DIGIT> | ["_", "!", "?"])*
+           (<LETTER> | <DIGIT> )
+         )? >
+}
+
+TOKEN :
+{
+  < #DIGIT : [ "0"-"9" ] >
+| < #LETTER : [ "a"-"z", "A"-"Z" ] >
+| < #ESCAPESEQ: "\\" ( ["n","t","b","r","f","\\","'","\""]
+                     | ["0"-"7"] ( ["0"-"7"] )?
+                     | ["0"-"3"] ["0"-"7"] ["0"-"7"] ) >
+}
+
+
+
+  //////////////////////////
+ //  Files and Blocks    //
+//////////////////////////
+
+//  This is usually the entry point to the parser.
+public void File() : { } {
+
+	Block(false) <EOF>
+} 
+
+/* endWithUnit says that an extra "();" should be inserted at
+* the end of the block.
+*/
+void Block(boolean endWithUnit) : {
+	int count ;
+	SourceCoords start = currentCoords() ;
+	SourceCoords end ;
+} {
+	{builder.startBlock() ;}
+	count = MoreBlock(0)
+    {end = prevCoords() ;}
+    {if( endWithUnit ) {
+        builder.mkTuple( 0, end) ;
+        builder.mkExpressionCommand() ;
+        ++count ; }
+    } 
+	{builder.endBlock( count, start.combine(end) ) ;}
+}
+
+
+int MoreBlock(int count) : {
+} {
+    LOOKAHEAD( <VAL> | <VAR> )
+    UndeliminatedDeclaration() {count++;}
+    (";" count=MoreBlock(count) )?
+    {return count;}
+|
+    LOOKAHEAD( <FUN> Variable() | <PROC> Variable() )
+    DeliminatedDeclaration() {count++;}
+    ((";")? count=MoreBlock( count ))
+    {return count;}
+|
+	UndelimitedCommand() {count++;}
+	(";" count=MoreBlock(count) )?
+	{return count;}
+|
+	DelimitedCommand() {count++;}
+	((";")? count=MoreBlock( count ))
+	{return count;}
+|
+    {return count;}
+}
+
+
+  /////////////////////////
+ //  Declarations       //
+/////////////////////////
+
+void UndeliminatedDeclaration() : {
+    SourceCoords start = currentCoords() ;
+    boolean isInitialized  = false ;
+    boolean isTyped = false ;
+    int count ;
+} {
+	<VAR>
+	Variable()
+	":"
+	Type()
+	( ":=" Exp() {isInitialized = true ;}
+	)?
+	{builder.varDeclaration( isInitialized, start.combine(prevCoords()) );}
+|
+	<VAL>
+	Variable()
+	(	":" Type() {isTyped = true ;}
+	)?
+	":="
+	Exp()
+	{builder.valDeclaration( isTyped, start.combine(prevCoords()) );}
+}
+
+void DeliminatedDeclaration() : {
+    SourceCoords start = currentCoords() ;
+    boolean isInitialized  = false ;
+    boolean isTyped = false ;
+    int count ;
+} {
+
+	<FUN> Variable() "(" count = Params() ")"
+	(":" Type() {isTyped=true;} )?
+	<DO> Block(false) <END> <FUN>
+	{builder.mkFunctionExp( count, isTyped, start.combine(prevCoords())) ;}
+	{builder.valDeclaration( false, start.combine(prevCoords()) );}
+	
+|
+	<PROC> Variable() "(" count = Params() ")"
+	{builder.mkIdentifierType( "Unit", start ) ;}
+	<DO> Block(true) <END> <PROC>
+	{builder.mkFunctionExp( count, true, start.combine(prevCoords())) ;}
+	{builder.valDeclaration( false, start.combine(prevCoords()) );}
+}
+
+
+  /////////////////////
+ //  Commands       //
+/////////////////////
+
+void DelimitedCommand() : {
+    SourceCoords start = currentCoords() ;
+} {
+	IfCommand(start)
+|
+	WhileCommand(start)
+|
+	ForCommand(start)
+|
+	BeginCommand()
+}
+
+void UndelimitedCommand() : {
+    SourceCoords start = currentCoords() ;
+} {
+	LOOKAHEAD( LHSs() ":=" )
+    AssignmentCommand(start)
+|
+	ExpCommand(start)
+|
+	ReturnCommand(start)
+}
+
+void AssignmentCommand(SourceCoords start) : {
+	SourceCoords end ;
+	int count ;
+} {
+	count = LHSs(start)
+	":="
+	Exps()
+	{end = prevCoords() ;}
+	{builder.mkAssignment( count, start.combine(end) ) ;}
+	
+}
+
+int LHSs(SourceCoords start) : {
+    int count = 1 ;
+} {
+	Variable() ("," Variable() {++count;} )*
+	{return count ;}
+}
+
+void IfCommand(SourceCoords start) : {
+} {
+	<IF> Exp() <THEN> Block(false) <ELSE> Block(false) <END> <IF>
+	{builder.mkIf( start.combine(prevCoords()) ) ;}
+	
+}
+
+void WhileCommand(SourceCoords start) : {
+} {
+	<WHILE> Exp() <DO> Block(false) <END> <WHILE>
+	{builder.mkWhile( start.combine(prevCoords()) ) ;}
+	
+}
+
+void ForCommand(SourceCoords start) : {
+} {
+	<FOR> Variable() "<-" Exp() <DO> Block(false) <END> <FOR>
+	{builder.mkFor( start.combine(prevCoords()) ) ;}
+	
+}
+
+void ReturnCommand(SourceCoords start) : {
+} {
+	<RETURN>
+	( Exp()  
+	|
+	   /*No expression is the same as return with ()*/
+       {builder.mkTuple( 0, start ) ;}
+    )
+	{builder.mkReturn( start.combine(prevCoords()) ) ;}
+}
+
+void BeginCommand() : {
+} {
+	<BEGIN> Block(false) <END>
+}
+
+void ExpCommand(SourceCoords start) : {
+} {
+	Exp()
+	{builder.mkExpressionCommand( ) ;}
+}
+  
+
+  /////////////////////
+ //  Expressions    //
+/////////////////////
+
+void Exp() : {
+} {
+    Expression(0)
+}
+void Expression(int precedence) : {
+	SourceCoords opCoords ;
+	String str ;
+} {
+	// To cope with operator precedence we use Richard's
+	// precedence climbing algorithm described at
+	// http://www.engr.mun.ca/~theo/Misc/exp_parsing.htm#climbing
+	Primary()
+	(
+		LOOKAHEAD( Op(), {stayInTheLoop( precedence )} )
+		str = Op()
+		{ opCoords = prevCoords() ; }
+		{builder.mkLookup( "binary(" +str+ ")", opCoords) ;}
+		Expression( 1+precedence( str ) ) 
+		{builder.mkApplication(opCoords) ;}
+	)*
+}
+
+void Primary() : {
+	SourceCoords start = currentCoords() ;
+	String str ;
+} {
+	str = Op()
+	Primary()
+	{builder.mkLookup( "unary(" +str+ ")", start) ;}
+	{builder.mkTuple( 0, start) ;}
+	{builder.mkApplication( start) ;}
+|
+	LOOKAHEAD( "(" Params() ")" "->" )
+	AbbreviatedFunctionExp()
+|
+	SimpleExp()
+	( PostfixOp( start ) )*
+}
+
+void PostfixOp( SourceCoords start ) : {
+	String name ;
+} {
+	"."
+	name = Name()
+	{builder.mkLookup( name, start.combine(prevCoords())) ;}
+| 
+	Arg()
+	{builder.mkApplication( start.combine(prevCoords())) ;}
+}
+
+void SimpleExp() : {
+    SourceCoords start = currentCoords() ;
+    Token tok ;
+} {
+	<TRUE>
+	{builder.mkTrue( start ) ;}
+|
+	<FALSE>
+	{builder.mkFalse( start ) ;}
+|
+	tok = <STRING_LITERAL>
+	{ builder.mkStringConstant(
+			ParserHelper.unescapeString( tok.image ),
+	        start ) ;
+	}
+|
+	tok = <INT_LITERAL>
+	{ builder.mkIntConstant(
+			ParserHelper.cleanUpInt( tok.image ),
+	    	start ) ;
+	}
+|
+	Variable()
+	{builder.mkFetch() ;}
+|
+	FiniteSetExp()
+|
+	FiniteSequenceExp()
+|
+	FunctionExp()
+|
+	ParenthizedExp()
+}
+
+void FiniteSetExp() : {
+    SourceCoords start = currentCoords() ;
+	int count = 0 ;
+} {
+	"{"
+	(	Exp()         {++count ;}
+		(	","
+			Exp()     {++count ;}
+		)*
+	)?
+	"}"
+	{builder.mkSet(count,  start.combine(prevCoords())) ;}
+}
+
+void FiniteSequenceExp() : {
+    SourceCoords start = currentCoords() ;
+	int count = 0 ;
+} {
+	"["
+	(	Exp()         {++count ;}
+		(	","
+			Exp()     {++count ;}
+		)*
+	)?
+	"]"
+	{builder.mkSequence(count,  start.combine(prevCoords())) ;}
+}
+
+void FunctionExp() : {
+    SourceCoords start = currentCoords() ;
+    boolean isTyped = false ;
+	int count ;
+} {
+	<FUN> "(" count = Params() ")"
+	(":" Type() {isTyped=true;} )?
+	<DO> Block(false) <END> <FUN>
+	{builder.mkFunctionExp( count, isTyped, start.combine(prevCoords())) ;}
+|
+    <PROC> "(" count = Params() ")"
+	{builder.mkIdentifierType( "Unit", start ) ;}
+	<DO> Block(true) <END> <PROC>
+	{builder.mkFunctionExp( count, true, start.combine(prevCoords())) ;}
+}
+
+void AbbreviatedFunctionExp() : {
+    SourceCoords start = currentCoords() ;
+    SourceCoords end ;
+    SourceCoords blockStart  ;
+	int count ;
+} {
+	"(" count = Params() ")"
+	"->"
+	{builder.startBlock() ;}
+	{blockStart = currentCoords() ; }
+	Primary()
+    {end = prevCoords() ;}
+    {builder.mkExpressionCommand( ) ;}
+	{builder.endBlock( 1, blockStart.combine( end ) ) ;}
+	{builder.mkFunctionExp( count, false, start.combine( end ) ) ;}
+}
+
+void ParenthizedExp() : {
+    SourceCoords start = currentCoords() ;
+	int count = 0 ;
+} {
+	"("
+	(
+		Exp()    {++count;}
+		( ","
+		  Exp()    {++count;}
+		)*
+	)?
+	")"
+	{ if( count != 1 ) {
+		builder.mkTuple( count, start.combine(prevCoords())) ;}
+	}
+}
+
+  /////////////////////
+ //  Types          //
+/////////////////////
+
+void Type() : {
+	SourceCoords start = currentCoords() ;
+} {
+	ProductType()
+	MoreType(start)
+}
+
+void MoreType(SourceCoords start) : {
+	SourceCoords mid ;
+} {
+	<RIGHT_ARROW>
+	{mid = currentCoords() ;}
+	ProductType()
+	MoreType(mid)
+	{builder.mkTypeApplication( "Fun", 2, start.combine(prevCoords()) );}
+|
+	{}
+}
+
+void ProductType() : {
+	SourceCoords start = currentCoords() ;
+	int count = 1 ;
+} {
+	SimpleType()
+	(
+		<STAR>
+		SimpleType()    {++count;}
+	)*
+	{if(count > 1) builder.mkTypeApplication( "Product", count, start.combine(prevCoords()) );}
+}
+
+void SimpleType() : {
+	SourceCoords start = currentCoords() ;
+	int count = 0 ;
+	Token tok ;
+} {
+	tok = <ID>
+	(
+		"["
+		Type()     {++count;}
+		(	","
+			Type()     {++count;}
+		)*
+		"]"
+		{builder.mkTypeApplication( tok.image, count, start.combine(prevCoords()) ) ;}
+	|
+		{builder.mkIdentifierType( tok.image, start.combine(prevCoords()) ) ;}
+	)
+|
+	"("
+	Type() 
+	")"
+}
+
+  /////////////////////
+ //  Miscellaneous  //
+/////////////////////
+
+void Arg() : { } {
+	SimpleExp()
+}
+
+void Exps() : {
+    SourceCoords start = currentCoords() ;
+	int count = 1 ;
+} {
+	Exp() ( "," Exp()    {++count;} )*
+	{ if( count != 1 ) {
+		builder.mkTuple( count, start.combine(prevCoords())) ;}
+	}
+}
+
+int Params() : {
+	int count = 0 ;
+} {
+	(	Variable() ":" Type() {++count;}
+		(	"," Variable() ":" Type() {++count;}
+		)*	
+	)?
+	{return count ;}
+}
+
+
+void Variable() : {
+	Token tok ;
+	SourceCoords start = currentCoords() ;
+} {
+	tok = <ID>
+	{builder.mkVariable( tok.image, start ) ;}
+}
+
+String Name() : {
+	Token tok ;
+	String str ;
+} {
+	tok = <ID> {return tok.image;}
+|
+	"binary" str = Op() {return "binary(" +str+ ")" ;}
+|
+	"unary" str = Op()	{return "unary(" +str+ ")" ;}
+}
+
+String Op() : {
+	Token tok ;
+}{
+	( tok = <STAR>
+	| tok = <LATEX_OP>
+	| tok = <OTHER_OP>
+	| tok = "and"
+	| tok = "div"
+	| tok = "intersection"
+	| tok = "implies"
+	| tok = "mod"
+	| tok = "not"
+	| tok = "or"
+	| tok = "union"
+	)
+	{return tok.image;}
+}
+	
+
+TOKEN : {
+   <UNEXPECTED_CHARACTER: ~[] >
+}

@@ -1,0 +1,1118 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>PSAM.md – </title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" href="docs.css" type="text/css" />
+</head>
+<body>
+<div id="TOC">
+<ul>
+<li><a href="#psam">PSAM</a><ul>
+<li><a href="#the-memory-structure-of-the-virtual-machine">The memory structure of the virtual machine</a></li>
+<li><a href="#fetch-execute-cycle">Fetch, execute cycle</a></li>
+<li><a href="#initial-state">Initial state</a></li>
+<li><a href="#the-frame-chain">The frame chain</a></li>
+<li><a href="#instructions">Instructions</a><ul>
+<li><a href="#value-making-instructions">Value making instructions</a></li>
+<li><a href="#location-manipulation-instructions">Location manipulation instructions</a></li>
+<li><a href="#stack-instruction">Stack instruction</a></li>
+<li><a href="#lookup-instruction">Lookup instruction</a></li>
+<li><a href="#apply-and-return-instructions">Apply and return instructions</a></li>
+<li><a href="#return">Return</a></li>
+<li><a href="#jumps">Jumps</a></li>
+<li><a href="#frame-instructions">Frame instructions</a></li>
+<li><a href="#type-making-instructions">Type making instructions</a></li>
+</ul></li>
+<li><a href="#predefined-values">Predefined Values</a></li>
+<li><a href="#examples">Examples</a><ul>
+<li><a href="#an-empty-program">An empty program</a></li>
+<li><a href="#applying-built-in-functions">Applying built in functions</a></li>
+<li><a href="#variable-declarations">Variable declarations</a></li>
+<li><a href="#defined-function.">Defined function.</a></li>
+<li><a href="#a-recursive-function">A recursive function</a></li>
+<li><a href="#a-function-returning-a-function">A function returning a function</a></li>
+<li><a href="#another-function-that-returns-a-function">Another function that returns a function</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+<h1 id="psam">PSAM</h1>
+<p>PSAM is the Pseu abstract machine. It is a virtual machine designed to execute Pseu programs.</p>
+<h2 id="the-memory-structure-of-the-virtual-machine">The memory structure of the virtual machine</h2>
+<p>The machine has 4 kinds of memory.</p>
+<ul>
+<li>There is a stack of values, types, and locations called the <em>value stack</em> (<em>v-stack</em> for short).</li>
+<li>The <em>return stack</em>, called the <em>r-stack</em> for short.</li>
+<li>A list of code segments called the <em>code store</em></li>
+<li>There is a collection of <em>frames</em>. Frames are described below.</li>
+</ul>
+<p>A frame is a run-time representation of a block. Each frame on the frame stack has an optional reference to another frame (called the frame's parent) and also contains list of <em>locations</em>.</p>
+<p>A <em>location</em> is the run-time representation of a variable. Each location has four parts: The run-time representation of a type. A boolean that indicates whether or not the variable is writable, a boolean that indicates whether or not the variable is readable, the current value of the location.</p>
+<p>Each item on the v-stack is either a (reference to a) value or one of a few other value-like things: (references to) locations and (references to) types.</p>
+<p>Each code segment in the code store is an array of <em>instructions</em>.</p>
+<p>Two registers represent the next instruction to be executed. These are the <em>segment counter</em> and the <em>program counter</em>. The segment counter indicates which segment is currently being executed and the program counter indicates the address of the next instruction to be executed in that segment. Both these registers are initially 0.</p>
+<p>There is a <em>frame pointer</em> register that contains a reference to a frame.</p>
+<p>There is a register <em>running</em>, which is a boolean, initially true.</p>
+<p>Each item of the return stack is a record containing.</p>
+<ul>
+<li>A segment number.</li>
+<li>An instruction number.</li>
+<li>A number representing the height of the v-stack.</li>
+<li>A reference to a frame.</li>
+<li>A boolean value for the running register.</li>
+<li>A result type, for dynamic checking of function results.</li>
+</ul>
+<h2 id="fetch-execute-cycle">Fetch, execute cycle</h2>
+<p>The basic algorithm of the machine is that the machine looks up the next instruction using the segment counter and the program counter, executes that expression, and then starts again. The cycle ends as soon as the <em>running</em> register is false or there is a run-time error.</p>
+<h2 id="initial-state">Initial state</h2>
+<p>A <em>program</em> is a list of segments.</p>
+<p>After loading a program the initial state of the machine is this:</p>
+<ul>
+<li>The v-stack is empty.</li>
+<li>The frame pointer points to the global frame. This is the frame for built in identifiers such as &quot;print&quot;.</li>
+<li>The code store contains the loaded program.</li>
+<li>The r-stack contains one record in which the value for the running flag is false, the result type is &quot;Any&quot;, and all numbers are 0.</li>
+<li>The segment counter is 0 and the program counter is 0.</li>
+</ul>
+<h2 id="the-frame-chain">The frame chain</h2>
+<p>Starting with the frame pointer and then following parent links, we find that there is a chain (or stack) of frames. Consider the following code. The top of this stack is the frame that the machines frame pointer points to.</p>
+<pre><code>   var x : Bool := true
+   val y : String := &quot;hello&quot;
+   if x then         // 1
+         var v : Int := 6
+         var w : Int
+         print x    
+         if x then // 2
+             var t : String 
+             var u : String
+             print y  //3
+         else
+         end if
+   end if</code></pre>
+<p>When execution reaches point 1, the top frame on the frame stack has locations representing <code>x</code> and <code>y</code>. When execution reaches point 2, the top of frame stack has locations representing <code>v</code> and <code>w</code>. The frame representing <code>x</code> and <code>y</code> will be second from the top. At point 3, the top frame has locations representing <code>t</code> and <code>u</code>; the frame with the locations representing <code>x</code> and <code>y</code> is now 3rd from the top.</p>
+<p>In the machine code, variable references are given by two numbers: the depth of the frame and the position within the frame. For example</p>
+<ul>
+<li>the reference to <code>x</code> at point 1 is represented by (0,0). The depth is 0 since the frame is on top of the stack. Then the location is 0, since x is declared first in the block.</li>
+<li>The reference to <code>x</code> at point 2 is represented by (1,0), since the frame is now 1 from the top of the frame stack.</li>
+<li>The reference to <code>y</code> on line 3 is (2,1) since the frame is 2 from the top of the frame stack and because <code>y</code> is the second variable defined in the block.</li>
+</ul>
+<p>At this point (line 3) the frame stack looks like this:</p>
+<p>The frame pointer points to</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>name</th>
+<th>value</th>
+<th>type</th>
+<th>readable</th>
+<th>writable</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0</td>
+<td>&quot;t&quot;</td>
+<td>??</td>
+<td>String</td>
+<td>false</td>
+<td>true</td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td>&quot;u&quot;</td>
+<td>??</td>
+<td>String</td>
+<td>false</td>
+<td>true</td>
+</tr>
+</tbody>
+</table>
+<p>That frame's parent is</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>name</th>
+<th>value</th>
+<th>type</th>
+<th>readable</th>
+<th>writable</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0</td>
+<td>&quot;v&quot;</td>
+<td>6</td>
+<td>Int</td>
+<td>true</td>
+<td>true</td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td>&quot;w&quot;</td>
+<td>??</td>
+<td>Int</td>
+<td>false</td>
+<td>true</td>
+</tr>
+</tbody>
+</table>
+<p>That frame's parent is</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>name</th>
+<th>value</th>
+<th>type</th>
+<th>readable</th>
+<th>writable</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0</td>
+<td>&quot;x&quot;</td>
+<td>true</td>
+<td>Bool</td>
+<td>true</td>
+<td>true</td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td>&quot;y&quot;</td>
+<td>&quot;hello&quot;</td>
+<td>String</td>
+<td>true</td>
+<td>false</td>
+</tr>
+</tbody>
+</table>
+<p>The parent of this frame is the global frame.</p>
+<p>Of course chasing pointers is potentially slow, since blocks might be nested deeply.</p>
+<p>There is an optimization to allow location lookups to happen in O(1) time. Instead of a parent pointer, each frame has an array of ancestors. Ancestor 0 is the frame itself; ancestor 1 is the parent frame; ancestor 2 is that frames parent and so on. The frame pointer does not point to the current frame, but rather to its ancestor array. Now to look up location (2,1) the machine:</p>
+<ul>
+<li>follows the frame pointer to find the current frame's ancestor array;</li>
+<li>gets item 2 out of that array, which points to the frame's grandparent;</li>
+<li>gets location 1 of that frame.</li>
+</ul>
+<h2 id="instructions">Instructions</h2>
+<p>Most instructions cause the program counter to increase by 1. I'll only mention the exceptions.</p>
+<p>Each instruction is associated with a source code coordinate. This is useful for debugging the compiler, for run time error reporting, and possibly other uses in the future.</p>
+<h3 id="value-making-instructions">Value making instructions</h3>
+<pre><code>   pushBool( boolean b )
+   pushInt( String str )
+   pushString( String str )</code></pre>
+<p>pushes the appropriate boolean value, integer, or string value on to the v-stack.</p>
+<p>It is a precondition of <code>pushInt</code>, that the string contains only ascii digits.</p>
+<pre><code>   makeTuple( int count )
+   makeSet( int count )
+   makeSeq( int count )</code></pre>
+<p>Each pops <code>count</code> items off the v-stack. These must be values. It constructs a tuple, set, or sequence and pushes the result onto the v-stack. The order of the items in the tuple of sequence is from bottom to top. I.e., when count &gt; 0, the last item of the sequence will be the former top of the stack.</p>
+<p>It is a precondition of all that count is not negative. Furthermore, for <code>makeTuple</code>, count will not be 1.</p>
+<pre><code>   makeClosure(int count)</code></pre>
+<p>pops 2*count + 2 items off the stack. These must be (from bottom to top).</p>
+<ul>
+<li>A string representing the name of parameter 0</li>
+<li>A type representing the type of parameter 0.</li>
+<li>A string representing the name of parameter 1.</li>
+<li>A type representing the type of parameter 1.</li>
+<li>....</li>
+<li>A string representing the name of the parameter count-1.</li>
+<li>A type representing the type of parameter count-1.</li>
+<li>A type representing the result type of the</li>
+<li>An integer representing the code segment in which the functions block may be found.</li>
+</ul>
+<h3 id="location-manipulation-instructions">Location manipulation instructions</h3>
+<pre><code>   pushLocation(int depth, int number)</code></pre>
+<p>pushes a reference to a location onto the v-stack. The location is found in a frame, so first the machine finds the frame. If <code>depth</code> is 0, the frame is the one on the top of the frame stack. If <code>depth</code> is 1, it is the parent of that frame. If <code>depth</code> is 2, it is the parent of the parent of the frame at the top of the f-stack.</p>
+<p>(Note that<code>depth</code> indicates the number of parent links to follow on the chain of frames that starts with the top of the frame stack. All frames on the f-stack other than the top frame are ignored.)</p>
+<p>Once a frame is found, the <code>number</code> indicates which location within that frame should be pushed.</p>
+<p>When the location is found, a reference to the location is pushed onto the v-stack.</p>
+<pre><code>   fetch()</code></pre>
+<p>fetches a value from a location. The top of the stack is popped off. It must be a reference to a location. If that location is not readable, it is a run-time error. Otherwise the value of the location is pushed onto the v-stack.</p>
+<pre><code>   store( int n )</code></pre>
+<p>stores to one or more locations. When <code>n</code> is one, there the v-stack should look like this (from bottom to top)</p>
+<pre><code>   ... loc, val</code></pre>
+<p>These two items are popped. If the location is not writable, it is a run-time error. If the value is not a member of the location's type, it is a run-time error. Otherwise the location's value is updated with the value and the location's <code>readable</code> flag is set to true. Finally the value is pushed back onto the stack:</p>
+<pre><code>   ... val</code></pre>
+<p>If <code>n</code> is more than 1, the v-stack should look like this</p>
+<pre><code>   ... loc_0, loc_1, ... loc_n-1, val</code></pre>
+<p>All these items are popped off the v-stack. In this case, the value must be an n-tuple. If it is, then the locations are updated as above.</p>
+<p>Precondition: n must be 1 or more.</p>
+<pre><code>   lockLocation()
+   unlockLocation()</code></pre>
+<p>The top of the stack should be a location. This location is popped and its writable flag is set to false or true, depending on the instruction.</p>
+<p>These instructions are useful for initializing <code>val</code> and <code>var</code> variables. First the variable is unlocked, then is initialized. Finally, for <code>val</code> variables, it is locked.</p>
+<h3 id="stack-instruction">Stack instruction</h3>
+<pre><code>   pop(int n)</code></pre>
+<p>Precondition: n must be 0 or more.</p>
+<p>The instruction simply pops <code>n</code> items off the v-stack.</p>
+<p>Runtime error if there are fewer than n things on the v-stack.</p>
+<pre><code>   duplicate()</code></pre>
+<p>Duplicate the item on the top of the v-stack.</p>
+<p>[Note: I don't think dup will be needed for compiling Pseu. It is included for completeness.]</p>
+<p>Runtime error if the v-stack is empty. <sub>~</sub> rotateUp(int n) rotateDown(int n) <sub>~</sub></p>
+<p>Precondition: n must be 1 or more.</p>
+<p>Runtime error if the v-stack size is less than n .</p>
+<p>rotateUp moves the item on the top of the v-stack to position n-1 from the top, pushing n-1 items up. So rotateUp(1) should have no effect. rotateUp(2) swaps the top two items of the stack. rotateUp(6) changes a stack</p>
+<pre><code>   ... u v w x y z</code></pre>
+<p>to</p>
+<pre><code>   ... z u v w x y </code></pre>
+<p>rotateDown( n ) does is the inverse operation to rotateUp( n ).</p>
+<p>[Note: I don't think either rotateUp or rotateDown will be needed for compiling Pseu. They are included for completeness.]</p>
+<h3 id="lookup-instruction">Lookup instruction</h3>
+<pre><code>   lookup( )</code></pre>
+<p>The v-stack should look like this</p>
+<pre><code>   ... val0 val1</code></pre>
+<p>the 2 items are popped from the stack. <code>val1</code> should be a string. If it is not, it is an error. Every value implements a <code>lookup</code> method which maps strings to values. The string represented by <code>val1</code> is sent to the <code>lookup</code> function of <code>val0</code>. If that lookup fails, it is a run time error. If the lookup succeeds, then the value resulting from the lookup is pushed onto the v-stack.</p>
+<p>Typically the value simply passes the lookup operation on to a type. For example, the lookup operation for integer values simply passes the lookup request to the &quot;Int&quot; type, but the value adds itself to the message.</p>
+<p>A list of lookups is described in section: <a href="#predefined-values">Predefined Values</a>.</p>
+<h3 id="apply-and-return-instructions">Apply and return instructions</h3>
+<pre><code>   apply()</code></pre>
+<p>The v-stack should look like this</p>
+<pre><code>   ... val0 val1</code></pre>
+<p>the 2 items are popped from the stack.</p>
+<p>The apply instruction applies the function represented by <code>val0</code> to the argument represented by <code>val1</code>.</p>
+<p>If <code>val0</code> is an integer value, string value, boolean value, tuple value, or set value there is a run-time error.</p>
+<p>If <code>val0</code> is a sequence value, it is an error unless <code>val1</code> is an integer greater or equal to 0 and less than the length of the sequence. Then the appropriate item of the sequence is pushed onto the stack.</p>
+<p>If <code>val0</code> is a built-in function value either an error is reported or the built-in function computes a value and pushes that value onto the stack.</p>
+<p>The most complicated case is when <code>val0</code> is a closure value.</p>
+<p>A closure consists of a description of a sequence of 0 or more (descriptions of) parameters, a reference to a frame, a result type, and the number of a code segment.</p>
+<p>The apply method for the closure acts on the virtual machine as follows.</p>
+<ol style="list-style-type: decimal">
+<li>A new return record is created. In this record, the machine stores
+<ul>
+<li>The current segment number.</li>
+<li>The current value of the program counter + 1.</li>
+<li>The height of the v-stack.</li>
+<li>The current value of the frame pointer.</li>
+<li>The return type from the closure</li>
+</ul></li>
+<li>This record is pushed onto the r-stack.</li>
+<li>A new frame is made based on the parameter information of the closure. The frame consists of one location per parameter. The parent of this frame will be the frame referenced in the closure.</li>
+<li>The <code>val1</code> value is used to initialize the parameters and then all parameters are set to be readable, but not writeable. Initialization is similar to assignment, so it is a run time error if there are 0 parameters and the <code>val1</code> is not an empty tuple. And it is an error if there is more than 1 parameter and <code>val</code> is not a tuple of the same size.</li>
+<li>The parent of the new frame is the frame reference found in the closure.</li>
+<li>The new frame is pushed onto the f-stack.</li>
+<li>The program counter is set to 0.</li>
+<li>The segment counter is set to the segment in the closure.</li>
+</ol>
+<p>That ends the apply operation for closures. The next instruction to be executed will be the first instruction of the function.</p>
+<h3 id="return">Return</h3>
+<pre><code>   returnNow( )</code></pre>
+<p>The top of the stack should contain a value; call it <code>val</code>. That value is popped from the stack.</p>
+<p>The r-stack should also not be empty. The top record on the r-stack is popped off. Call it <code>r</code>.</p>
+<p>It is a run-time error if <code>val</code> is not a member of the result type stored in <code>r</code>.</p>
+<p>The state is restored from <code>r</code>:</p>
+<ol style="list-style-type: decimal">
+<li>The size of the v-stack is cut down to the size recorded in <code>r</code>.</li>
+<li><code>val</code> is pushed onto the v-stack.</li>
+<li>The registers are restored from <code>r</code>.</li>
+</ol>
+<h3 id="jumps">Jumps</h3>
+<pre><code>   jump( int i )</code></pre>
+<p>Instead of adding one to the program counter, <code>i</code> is added to the program counter.</p>
+<pre><code>   jumpOnFalse( int i )
+   jumpOnTrue( int i )</code></pre>
+<p>The top of the v-stack should be a boolean value. If not, there is a run-time type error.</p>
+<p>The v-stack is popped. Depending on the value, either <code>1</code> or <code>i</code> is added to the program counter.</p>
+<h3 id="frame-instructions">Frame instructions</h3>
+<pre><code>   newFrame(int count)</code></pre>
+<p>The top of the stack should contain <code>2*n</code> values. Like this, from bottom to top:</p>
+<ul>
+<li>A string value representing the name of variable 0</li>
+<li>A type representing the type of parameter 0.</li>
+<li>A string value representing the name of variable 1.</li>
+<li>A type representing the type of variable 1.</li>
+<li>....</li>
+<li>A string value representing the name of the variable count-1.</li>
+<li>A type representing the type of variable count-1.</li>
+</ul>
+<p>All these items are popped off the stack and a new frame is made. The frame will contain <code>count</code> locations. The names and types of the locations come from the information on the stack. Both the readable and writable flags are set to false. The initial value of the locations does not matter since they will not be until the first assignment to the variable.</p>
+<p>The parent of the new frame will be the current value of the frame pointer. The new frame becomes the new value of the frame pointer.</p>
+<pre><code>   popFrame()</code></pre>
+<p>The new value of the frame pointer will be the parent of the frame the frame pointer points to.</p>
+<p>It is a run-time error to pop a frame with no parent. (The only frame that will have no parent will be the global frame.)</p>
+<h3 id="type-making-instructions">Type making instructions</h3>
+<p>At run-time, types are treated as objects that we can put on the v-stack. The set of types available is not extensible.</p>
+<p>The instruction</p>
+<pre><code>   constructType(String name, int n)</code></pre>
+<p>expects the top <code>n</code> items on the v-stack to be types:</p>
+<pre><code>  ty_0, ty1, ..., ty_n-1</code></pre>
+<p>All these values are popped. The machine attempts to make a type and, if successful pushes it onto the v-stack.</p>
+<p>The following argument combinations should succeed if the top <code>n</code> items on the v-stack are types.</p>
+<table>
+<thead>
+<tr class="header">
+<th>name</th>
+<th>n</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Unit</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>Bool</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>Int</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>String</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>Any</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>None</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td>Seq</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td>Set</td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td>Fun</td>
+<td>2</td>
+</tr>
+<tr class="even">
+<td>Product</td>
+<td>any number &gt; 1</td>
+</tr>
+</tbody>
+</table>
+<p>For example the type <code>Seq[Int] * Bool -&gt; Unit</code> can be constructed by</p>
+<pre><code>      constructType( &quot;Int&quot;, 0 )
+      constructType( &quot;Seq&quot;, 1 )
+      constructType( &quot;Product&quot;, 2 )
+      constructType( &quot;Bool&quot;, 0 )
+      constructType( &quot;Fun&quot;, 2 )</code></pre>
+<h2 id="predefined-values">Predefined Values</h2>
+<p>In the global frame there are 3 predefined val variables.</p>
+<table>
+<thead>
+<tr class="header">
+<th>name</th>
+<th>address in frame</th>
+<th>type</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>print</td>
+<td>0</td>
+<td>Fun[Any, Unit]</td>
+<td>Print a representation of the value</td>
+</tr>
+<tr class="even">
+<td>readInt</td>
+<td>1</td>
+<td>Fun[Unit, Int]</td>
+<td>Read an integer from the input</td>
+</tr>
+<tr class="odd">
+<td>readString</td>
+<td>2</td>
+<td>Fun[Unit, String]</td>
+<td>Read a line from the input</td>
+</tr>
+</tbody>
+</table>
+<p>For integer values there are the following attributes</p>
+<table>
+<thead>
+<tr class="header">
+<th>name</th>
+<th>type</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>binary(=)</td>
+<td>Fun[Any, Bool]</td>
+<td>equality</td>
+</tr>
+<tr class="even">
+<td>binary(!=)</td>
+<td>Fun[Any, Bool]</td>
+<td>inequality</td>
+</tr>
+<tr class="odd">
+<td>binary(/=)</td>
+<td>Fun[Any, Bool]</td>
+<td>inequality</td>
+</tr>
+<tr class="even">
+<td>binary(+)</td>
+<td>Fun[Int, Int]</td>
+<td>addition</td>
+</tr>
+<tr class="odd">
+<td>binary(-)</td>
+<td>Fun[Int, Int]</td>
+<td>subtraction</td>
+</tr>
+<tr class="even">
+<td>binary(*)</td>
+<td>Fun[Int, Int]</td>
+<td>multiplication</td>
+</tr>
+<tr class="odd">
+<td>binary(/)</td>
+<td>Fun[Int, Int]</td>
+<td>integer division</td>
+</tr>
+<tr class="even">
+<td>binary(div)</td>
+<td>Fun[Int, Int]</td>
+<td>same as binary(/)</td>
+</tr>
+<tr class="odd">
+<td>binary(mod)</td>
+<td>Fun[Int, Int]</td>
+<td>remainder</td>
+</tr>
+<tr class="even">
+<td>binary(&lt;)</td>
+<td>Fun[Int, Bool]</td>
+<td>less than</td>
+</tr>
+<tr class="odd">
+<td>binary(&gt;)</td>
+<td>Fun[Int, Bool]</td>
+<td>greater than</td>
+</tr>
+<tr class="even">
+<td>binary(_&lt;)</td>
+<td>Fun[Int, Bool]</td>
+<td>less than or equal to</td>
+</tr>
+<tr class="odd">
+<td>binary(&lt;=)</td>
+<td>Fun[Int, Bool]</td>
+<td>less than or equal to</td>
+</tr>
+<tr class="even">
+<td>binary(\le)</td>
+<td>Fun[Int, Bool]</td>
+<td>less than or equal to</td>
+</tr>
+<tr class="odd">
+<td>binary(&gt;_)</td>
+<td>Fun[Int, Bool]</td>
+<td>greater than or equal to</td>
+</tr>
+<tr class="even">
+<td>binary(&gt;=)</td>
+<td>Fun[Int, Bool]</td>
+<td>greater than or equal to</td>
+</tr>
+<tr class="odd">
+<td>binary(\ge)</td>
+<td>Fun[Int, Bool]</td>
+<td>greater than or equal to</td>
+</tr>
+<tr class="even">
+<td>unary(-)</td>
+<td>Fun[Unit, Int]</td>
+<td>negation</td>
+</tr>
+</tbody>
+</table>
+<p>For boolean values there are the following attributes</p>
+<table>
+<thead>
+<tr class="header">
+<th>name</th>
+<th>type</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>binary(=)</td>
+<td>Fun[Any, Bool]</td>
+<td>equality</td>
+</tr>
+<tr class="even">
+<td>binary(!=)</td>
+<td>Fun[Any, Bool]</td>
+<td>inequality</td>
+</tr>
+<tr class="odd">
+<td>binary(/=)</td>
+<td>Fun[Any, Bool]</td>
+<td>inequality</td>
+</tr>
+<tr class="even">
+<td>binary(implies)</td>
+<td>Fun[Bool, Bool]</td>
+<td>implication</td>
+</tr>
+<tr class="odd">
+<td>binary(==&gt;)</td>
+<td>Fun[Bool, Bool]</td>
+<td>implication</td>
+</tr>
+<tr class="even">
+<td>binary(or)</td>
+<td>Fun[Bool, Bool]</td>
+<td>disjunction (or)</td>
+</tr>
+<tr class="odd">
+<td>binary(and)</td>
+<td>Fun[Bool, Bool]</td>
+<td>conjunction</td>
+</tr>
+<tr class="even">
+<td>binary(not)</td>
+<td>Fun[Unit, Bool]</td>
+<td>negation</td>
+</tr>
+</tbody>
+</table>
+<p>For sequences there are the following attributes</p>
+<table>
+<thead>
+<tr class="header">
+<th>name</th>
+<th>type</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>length</td>
+<td>Int</td>
+<td>length of the sequence</td>
+</tr>
+</tbody>
+</table>
+<p>For sets there are the following attributes</p>
+<table>
+<thead>
+<tr class="header">
+<th>name</th>
+<th>type</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>size</td>
+<td>Int</td>
+<td>length of the sequence</td>
+</tr>
+</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<h3 id="an-empty-program">An empty program</h3>
+<p>An empty block should have a value of (), so the code for a completely empty program would be either.</p>
+<pre><code>Segment  0:
+     newFrame(0)
+     makeTuple(0)
+     popFrame()
+     returnNow() </code></pre>
+<p>Or simply</p>
+<pre><code>Segment  0:
+     makeTuple(0)
+     returnNow() </code></pre>
+<h3 id="applying-built-in-functions">Applying built in functions</h3>
+<p>Consider the program</p>
+<pre><code>   print &quot;Hello world!&quot; ;
+   2 + 1 ;</code></pre>
+<p>This is a block. Inside the block is are two expression commands. The first applies a built in function. The second applies a property of a number. (Note that the parser will treat &quot;2+1&quot; as if it was written &quot;2.binary(+) ( 1 )&quot;.)</p>
+<pre><code>Segment  0:
+    newFrame(0)
+    // New frame with 0 variables 
+    // Now the frame pointer point to a frame
+    // containing 0 locations. Its parent is the
+    // global frame
+    
+    pushLocation(1, 0)
+    // since 0 is the position of the &quot;print&quot; variable in the global frame.
+    // v-stack:  The location of &quot;print&quot;
+    fetch()
+    // v-stack: The value in that location
+    // This value is a built-in function value
+    pushString( &quot;Hello world!&quot; )
+    // v-stack: The value of location (1,n), &quot;Hello world!&quot;
+    apply( )
+    // v-stack: the empty tuple
+    // Because the value returned by the built in is that tuple.
+    
+    
+    // The value of the first command is not needed, so we should discard it.
+    pop( 1 )
+    
+    // v-stack is empty
+    pushInt( 2 ) ;
+    // v-stack: 2
+    pushString( &quot;binary(+)&quot; )
+    // v-stack: 2, &quot;binary(+)&quot; 
+    lookup()
+    // v-stack: The value of the &quot;binary(+)&quot; property for the number 2
+    pushInt(1)
+    // v-stack: The value of the &quot;binary(+)&quot; property for the number 2, 1
+    apply()
+    // v-stack: 3
+    popFrame() // Because it&#39;s the end of the block
+    returnNow() </code></pre>
+<p>An optimization is to omit the first and last instructions. Then the pushLocation instruction would have parameters 0 and n. This optimization is possible whenever a block contains no variable declarations.</p>
+<h3 id="variable-declarations">Variable declarations</h3>
+<p>Here is a program with some variables</p>
+<pre><code>   var x : Int := 100 ;
+   val y := x + 1 ;
+   var z : Int ;
+   z := y + 1 ;
+   print z</code></pre>
+<p>The machine code could look like this</p>
+<pre><code>Segment  0:
+   // The next 5 instructions represent the start of
+   // the block.
+   pushString( &quot;x&quot; )
+   constructType(&quot;Int&quot;, 0)
+   pushString( &quot;y&quot; )
+   constructType(&quot;Any&quot;, 0)
+   pushString( &quot;z&quot; )
+   constructType(&quot;Int&quot;, 0)
+   // v-stack: &quot;x&quot;, Int, &quot;y&quot;, Any, &quot;z&quot;, Int
+   newFrame( 3 ) ; 
+   // v-stack: empty
+   // Now the frame pointer point to a frame
+   // containing 3 locations. Its parent is the
+   // global frame.
+   // All 3 locations are not writable and not readable
+   
+   // var x : Int := 100
+   // The initialization of x
+   pushLocation( 0, 0 )  // prepare to assign to x
+      pushInt( 100 ) 
+   // v-stack: a location, 100
+   pushLocation( 0, 0 ) 
+   // v-stack: a location, 100, the location again
+   unlockLocation() // Now location 0 is writable, but not readable.
+   // v-stack: a location, 100
+   store( 1 ) 
+   // v-stack: 100
+   // After the store, the location is both readable and writable.
+   
+   // Since this is not the last command or declaration in the block, the value is not needed.
+   pop(1)
+   // v-stack: empty
+   
+   // val y := x + 1
+  
+   // The initialization of y
+   pushLocation( 0, 1 ) // prepare to assign to y
+   // v-stack: location
+   // The expression x + 1
+      pushLocation( 0, 0 ) // x
+      fetch()
+      // v-stack: location, 100
+      pushString( &quot;binary(+)&quot; )   
+      // v-stack: location, 100, &quot;binary(+)&quot;
+      lookup()
+      // v-stack: location, a built-in function
+      pushInt( 1 )
+      // v-stack: location, a built-in function, 1
+      apply()
+      // v-stack: location, 101
+   pushLocation( 0, 1 ) 
+   unlockLocation() // Now location 1 is writable, but not readable.
+   store( 1 ) 
+   // Now it is both readable and writable.
+   // v-stack: 101   
+   pushLocation( 0, 1 ) 
+   lockLocation()
+   // Now it is readable but not writable.
+   // v-stack: 101
+   
+   // Since this is not the last command or declaration in the block, the value is not needed.
+   // pop(1)
+   // v-stack: empty
+   
+   // var z : Int
+   pushLocation( 0, 2 ) 
+   unlockLocation() // Now location 2 is writable, but not readable.
+   makeTuple( 0 ) 
+   // v-stack: the empty tuple
+   
+   pop(1)
+   
+   // x := y + 1 ;
+   pushLocation(0, 0)  // x
+   // v-stack: location of x
+      pushLocation(0, 1)  // y
+      // v-stack: location of x, location of y
+      fetch( )
+      // v-stack: location of x, 101
+      pushString( &quot;binary(+)&quot; )
+      // v-stack: location of x, 101, &quot;binary(+)&quot;
+      lookup()
+      // v-stack: location of x, 101, a function
+      pushInt( &quot;1&quot; ) 
+      apply()  // Add
+   // v-stack: location of x, 102
+   store()   // Store into x
+   // v-stack: 102
+   
+   pop(1)
+   
+   // print z
+   pushLocation(1, n)
+   // where n is is the address of &quot;print&quot;
+   fetch()
+   pushLocation(0, 2)
+   fetch()
+   apply()
+   
+   // The end of the block
+   popFrame()
+   returnNow() </code></pre>
+<p>The sequence</p>
+<pre><code>   makeTuple(0)
+   pop(1)</code></pre>
+<p>could be optimized out. It might simplify writing the code generator, though, if every command and declaration leaves a value on the stack and the code generation routine for blocks emits a pop instruction after compiling each block item except the last. That's why I did the example this way.</p>
+<h3 id="defined-function.">Defined function.</h3>
+<p>Consider this function definition and application</p>
+<pre><code>   fun square( x : Int ) : Int do
+       x * x 
+   end fun
+   print( square(42) ) </code></pre>
+<p>Possible Machine code is as follows: The block that makes up the body of the function is put in a separate code segment. In this case, I'll assume it is segment 1.</p>
+<pre><code>Segment  0:
+   pushString( &quot;square&quot; )
+   constructType( &quot;Any&quot;, 0 )
+   newFrame( 1 ) 
+   
+   // The initialization of square
+   pushLocation(0, 0)
+      // Make a closure
+      pushString( &quot;x&quot; )        // Name of parameter
+      constructType( &quot;Int&quot;, 0) // Type of parameter
+      constructType( &quot;Int&quot;, 0) // Type of result
+      pushInt( 1 )             // The segment of the code
+      makeClosure( 1 ) // There is one parameter
+   pushLocation(0, 0)
+   unlockLocation( )
+   store( 1) // Do the initialization
+   pushLocation(0, 0)
+   lockLocation( )
+   
+   pop( 1 )
+   
+   // print( square(42) ) 
+   pushLocation( 1, 0 ) // Since 0 is the position of print in the global frame
+   fetch() 
+   pushLocation( 0, 0 ) // The location of square
+   fetch()
+   pushInt( &quot;42&quot; )
+   apply()
+   apply() 
+   popFrame()
+   returnNow() 
+ 
+ 
+Segment  1:
+   // Segment 1 represents the body of the function
+   newFrame( 0 )
+   pushLocation( 1, 0 ) // The location of x
+   fetch()
+   pushString( &quot;binary(*)&quot; ) 
+   lookUp( )
+   pushLocation( 1, 0 ) // The location of x
+   fetch()
+   apply() 
+   popFrame()
+   returnNow() </code></pre>
+<p>In the above code, I put in a frame for the body of the function, even though there are no variables declared in it. An optimization is to omit the <code>newFrame</code> and <code>popFrame</code> instructions. In that case the top frame would represent the parameters and the location of <code>x</code> would be represented by (0,0) instead of (1,0).</p>
+<h3 id="a-recursive-function">A recursive function</h3>
+<pre><code>   fun fib( n : Int ) : Int do
+       if n &gt; 2 then 1
+       else fib(n-1) + fib(n-2)
+   end fun
+   fib( 42 ) </code></pre>
+<p>The code for the body of the function could be this.</p>
+<pre><code> Segment 1:
+      // if n &gt; 2
+        pushLocation( 0, 0 )  // Location of n
+        fetch()               // Fetch n
+        pushString( &quot;binary(&gt;)&quot; )
+        lookup()
+        pushInt( 2 )
+        apply()
+        jumpOnFalse( 3 ) 
+     // Then
+         pushInt( &quot;1&quot; ) 
+     // Else
+     jump( 22 )
+         // fib (n-1)
+         pushLocation( 1, 0 ) // Location of fib
+         fetch()
+            // n-1
+            pushLocation( 0, 0 )  // Location of n
+            fetch()               // Fetch n
+            pushString( &quot;binary(-)&quot; )
+            lookup()
+            pushInt( 1 )
+            apply()
+         apply()
+         
+         pushString( &quot;binary(+)&quot; )
+         lookup()
+         
+         // fib (n-2)
+         pushLocation( 1, 0 ) // Location of fib
+         fetch()
+            // n-1
+            pushLocation( 0, 0 )  // Location of n
+            fetch()               // Fetch n
+            pushString( &quot;binary(-)&quot; )
+            lookup()
+            pushInt( 2 )
+            apply()
+         apply()
+         
+         apply() // Do the addition
+      // end if
+      returnNow()      </code></pre>
+<p>This time, I didn't make a frame for the body of the function. Nor for the blocks representing the two tines of the if command. This is possible because there are no variables declared in any of these blocks. For this reason the parameter <code>n</code> is at location <code>(0,0)</code> and <code>fib</code> is at location <code>(1,0)</code> meaning that it is the first variable in the frame representing the block that contains the function.</p>
+<p>If there were new frames made for each of these three blocks, the first fetch of <code>n</code> would use location <code>(1,0)</code>, the other fetches of <code>n</code> being one block deeper, would use location <code>(2,0)</code>. The fetches of <code>fib</code> would use location <code>(3,0)</code>. Like this</p>
+<pre><code>Segment 1:
+      newFrame( 0 ) 
+      // if n &gt; 2
+        pushLocation( 1, 0 )  // Location of n
+        fetch()               // Fetch n.
+     ...
+     jump( 24 )
+         newFrame()
+         pushLocation( 3, 0 ) // Location of fib
+         fetch()
+            // n-1
+            pushLocation( 2, 0 )  // Location of n
+            fetch()               // Fetch n
+            ...
+         
+         // fib (n-2)
+         pushLocation( 3, 0 ) // Location of fib
+         fetch()
+            // n-1
+            pushLocation( 2, 0 )  // Location of n
+            fetch()               // Fetch n
+         ...
+         popFrame()
+      // end if
+      popFrame() 
+      returnNow()
+         </code></pre>
+<h3 id="a-function-returning-a-function">A function returning a function</h3>
+<p>Consider this function that returns a function as its value</p>
+<pre><code>    fun twice( f : Any -&gt; Any ) : Any -&gt; Any do
+       fun ( x : Any ) : Any do f(f(x)) end fun
+    end fun ;
+    twice( 3.binary *)( 7 )</code></pre>
+<p>This is a rather strange way of calculating 3 * 3 * 7. Here <code>3.binary *</code> is a built-in function that multiplies its argument by 3. Then <code>twice( 3.binary *)</code> is a function that multiplies its argument by 9. And <code>twice( 3.binary *)( 7 )</code> computes 9*7.</p>
+<p>We'll make no frames for blocks with no variable declarations.</p>
+<p>The main segment represents a block with a declaration of <code>twice</code> and then an expression command.</p>
+<pre><code>    pushString( &quot;twice&quot; )
+    constructType( &quot;Any&quot;, 0 ) 
+    newFrame( 1 ) 
+    
+    // val fun := ... 
+    pushLocation( 0, 0 ) // Location of twice
+    
+        // Construct a closure
+           // Name of parameter
+              pushString( &quot;f&quot; )  
+           // Type of parameter
+              constructType( &quot;Any&quot;, 0 )
+              constructType( &quot;Any&quot;, 0 )
+              constructType( &quot;Fun&quot;, 2 )
+           // Type of result
+              constructType( &quot;Any&quot;, 0 )
+              constructType( &quot;Any&quot;, 0 )
+              constructType( &quot;Fun&quot;, 2 )
+           // Code in segment 1
+              pushInt( 1 )
+           makeClosure( 1 ) // One parameter
+    pushLocation( 0, 0 ) // Location of twice
+    unlockLocation() 
+    store( 1 ) 
+    pushLocation( 0, 0 ) // Location of twice
+    lockLocation() 
+    
+    pop( 1 )
+    
+    // twice( 3.binary* ) ( 7 )
+    pushLocation( 0, 0 ) // Location of twice
+    fetch()
+    pushInt( 3 )
+    pushString( &quot;binary(*)&quot; )
+    lookup()
+    apply()
+    pushInt( 7 )
+    apply
+    
+    popFrame()
+    returnNow()</code></pre>
+<p>The segment for the <code>twice</code> function makes a closure and returns. It would look like this.</p>
+<pre><code>Segment 1:
+    pushString( &quot;x&quot; )
+    constructType( &quot;Any&quot;, 0 )  // Type of x
+    constructType( &quot;Any&quot;, 0 ) //   Result type
+    pushInt( 2 ) // Code in segment 2
+    makeClosure( 1 ) // 1 parameter
+    returnNow()</code></pre>
+<p>The segment for the inner function's body simply computes <code>f( f x )</code>. When it executes, <code>x</code> will be in the parameter frame, while <code>f</code> will be in the frame outside of that.</p>
+<pre><code>Segment 2:
+    // f( f x ) )
+    pushLocation( 1, 0 )  // Location of f
+    fetch()
+    pushLocation( 1, 0 ) // Location of f
+    fetch()
+    pushLocation( 0, 0 ) // Location of x
+    apply()
+    apply()
+    returnNow( )</code></pre>
+<h3 id="another-function-that-returns-a-function">Another function that returns a function</h3>
+<p>Consider this pseu program.</p>
+<pre><code>fun f( x : Int ) do 
+    return fun( y : Int ) : Int do x+y end
+end ;
+val g : Int -&gt; Int := f 2 ;
+val h : Int -&gt; Int := f 3;
+(g 5, h 5)</code></pre>
+<p>The machine code could be</p>
+<p>Segment 0</p>
+<pre><code>// Make a frame with 3 variables, f, g, h.
+pushString(&quot;f&quot;)
+constructType(&quot;Int&quot;, 0)
+constructType(&quot;Any&quot;, 0)
+constructType(&quot;Fun&quot;, 2)
+pushString(&quot;g&quot;)
+constructType(&quot;Int&quot;, 0)
+constructType(&quot;Int&quot;, 0)
+constructType(&quot;Fun&quot;, 2)
+pushString(&quot;h&quot;)
+constructType(&quot;Int&quot;, 0)
+constructType(&quot;Int&quot;, 0)
+constructType(&quot;Fun&quot;, 2)
+newFrame( 3)
+
+// fun f( x : Int ) do 
+//     return fun( y : Int ) : Int do x+y end
+// end
+pushLocation( 0, 0)
+                                
+
+pushString(&quot;x&quot;)
+constructType(&quot;Int&quot;, 0)
+constructType(&quot;Int&quot;, 0)
+pushInt(&quot;1&quot;)
+makeClosure(1)
+pushLocation( 0, 0)
+unlockLocation()
+store(1)
+                                
+pushLocation( 0, 0)
+lockLocation()
+                                
+pop(1   )
+                                
+// val g : Int-&gt;Int := f(2) ;
+pushLocation( 0, 1) 
+
+pushLocation( 0, 0)
+fetch()
+pushInt( &quot;2&quot;)
+apply()
+                                
+pushLocation( 0, 1)
+unlockLocation()
+store(1)
+                                
+pushLocation( 0, 1)
+lockLocation()
+                                
+pop(1   )
+                                
+// val h : Int-&gt;Int := f(3) ;
+pushLocation( 0, 2)     
+
+pushLocation( 0, 0)
+fetch()
+pushInt( &quot;3&quot;)
+apply()
+                                
+pushLocation( 0, 2)
+unlockLocation()
+store(1)
+                                
+pushLocation( 0, 2)
+lockLocation()
+                                
+pop(1   )
+                                
+// (g(5), h(5))
+pushLocation( 0, 1)
+fetch()
+pushInt( &quot;5&quot;)
+apply()
+                                
+pushLocation( 0, 2)
+fetch()
+pushInt( &quot;5&quot;)
+apply()
+                                
+makeTuple(2)
+                
+popFrame()  // Not needed, but the compiler might make it
+returnNow()</code></pre>
+<p>Segment 1:</p>
+<pre><code>// The body of function f
+// return fun( y : Int ) : Int do x+y end
+newFrame(0)
+                                
+pushString(&quot;y&quot;)
+constructType(&quot;Int&quot;, 0)
+constructType(&quot;Int&quot;, 0)
+pushInt(&quot;2&quot;)
+makeClosure(1)
+returnNow()
+popFrame()</code></pre>
+<p>Segment 2:</p>
+<pre><code>// The body of the anonymous function
+//  x+y
+newFrame(0)
+                                
+pushLocation( 3, 0)  // x
+fetch()
+pushString(&quot;binary(+)&quot;)
+lookup()
+pushLocation(1, 0)  / y
+fetch()
+apply()
+                                
+returnNow()
+popFrame()</code></pre>
+</body>
+</html>

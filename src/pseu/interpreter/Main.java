@@ -1,0 +1,56 @@
+// You can modify and use this file to make a stand-alone
+// Java program to implement the Pseu language.
+// See modification instructions below.
+package pseu.interpreter;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.io.Reader;
+
+import pseu.common.CompileTimeError;
+import pseu.common.RunTimeError;
+import pseu.parser.ParseException;
+import pseu.parser.TokenMgrError;
+
+public class Main {
+
+	public static void main(String[] args) {
+		String fileName ;
+		Reader reader ;
+		if( args.length > 0 ) {
+			fileName = args[0] ;
+			File programFile = new File( fileName ) ;
+			try {
+				reader = new FileReader( programFile ) ;
+			} catch (FileNotFoundException e) {
+				System.err.println( "File "+fileName+" not found.!") ;
+				return ;
+			}
+		} else {
+			fileName = "stdin" ;
+			reader = new InputStreamReader( System.in ) ;
+		}
+		// On the next line, in place of null, put a
+		// the construction of your own
+		// implementation of the interpreter interface.
+		//  E.g. ... = new GroupXInterpreter() ;
+		InterpreterI interpreter = null ;
+		try {
+			interpreter.compileAndRun(fileName, reader, false);
+		} catch (ParseException e) {
+			System.err.println("Parsing error." ) ;
+			System.err.println( e.getLocalizedMessage() ) ;
+		} catch (TokenMgrError e) {
+			System.err.println("Lexing error." ) ;
+			System.err.println( e.getLocalizedMessage() ) ;
+		} catch (CompileTimeError e) {
+			System.err.println("Compilation error at ."+e.getCoords().toString() ) ;
+			System.err.println( e.getLocalizedMessage() ) ;
+		} catch (RunTimeError e) {
+			System.err.println("Execution error at ."+e.getCoords().toString() ) ;
+			System.err.println( e.getLocalizedMessage() ) ;
+		}
+	}
+}
