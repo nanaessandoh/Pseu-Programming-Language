@@ -1,7 +1,7 @@
 // You can modify and use this file to make a stand-alone
 // Java program to implement the Pseu language.
 // See modification instructions below.
-package pseu.interpreter;
+package pseudo.Interpretor;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -11,6 +11,7 @@ import java.io.Reader;
 
 import pseu.common.CompileTimeError;
 import pseu.common.RunTimeError;
+import pseu.interpreter.InterpreterI;
 import pseu.parser.ParseException;
 import pseu.parser.TokenMgrError;
 
@@ -36,7 +37,7 @@ public class Main {
 		// the construction of your own
 		// implementation of the interpreter interface.
 		//  E.g. ... = new GroupXInterpreter() ;
-		InterpreterI interpreter = null ;
+		InterpreterI interpreter = new GroupBInterpreter() ;
 		try {
 			interpreter.compileAndRun(fileName, reader, false);
 		} catch (ParseException e) {
