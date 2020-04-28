@@ -5,7 +5,7 @@ This project represents the public part of the Pseu compiler/interpreter project
 
 ## Documentation For Pseu Programming Language
 
-[Documentation of PSAM, the virtual machine design to eexecute Pseu Code](https://github.com/nanaessandoh/Pseu-Programming-Language/blob/master/docs/PSAM.md)
+[Documentation of PSAM, the virtual machine design to execute Pseu Code](https://github.com/nanaessandoh/Pseu-Programming-Language/blob/master/docs/PSAM.md)
 
 [Documentation on how to extend the syntax from the core language to the full language](https://github.com/nanaessandoh/Pseu-Programming-Language/blob/master/docs/Syntactic-and-other-extensions.md)
 
